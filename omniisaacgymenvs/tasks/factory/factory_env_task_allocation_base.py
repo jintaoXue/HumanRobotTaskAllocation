@@ -258,9 +258,9 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # self.max_speed_up_down = 0.1
         # self.max_speed_grip = 0.1
         self.operator_gripper = torch.tensor([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], device='cuda:0')
-        self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_inner_station", 3:"grip", 4:"lifting"}
+        self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_to_inner_station", 3:"place_cut_to_outer_station"}
         self.gripper_inner_task = 0
-        self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"picked", 3:"placing"}
+        self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"placing", 4:"placed"}
         self.gripper_inner_state = 0
 
         self.gripper_outer_task_dic = {0: "reset", 1:"move_inner", 2:"down", 3:"grip", 4:"lifting"}
@@ -270,12 +270,16 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
 
         #welder 
         # self.max_speed_welder = 0.1
-        self.welder_inner_oper_time = 10
+        self.welder_oper_time = 10
         self.operator_welder = torch.tensor([0.1], device='cuda:0')
         self.welder_task_dic = {0: "reset", 1:"weld_middle", 2:"weld_left", 3:"weld_right"}
+        self.welder_state_dic = {0: "free_empty", 1:"welding_middle", 2:"welded_middle", 3:"welding_left", 4:"welded_left", 5:"welding_right", 6:"welded_right"}
+        
         self.welder_inner_task = 0
-        self.welder_inner_state_dic = {0: "free_empty", 1:"welding_middle", 2:"welded_middle", 3:"welding_left", 4:"welded_left", 5:"welding_right", 6:"welded_right"}
         self.welder_inner_state = 0
+        
+        self.welder_outer_task = 0
+        self.welder_outer_state = 0
         
         #station
         # self.welder_inner_oper_time = 10
@@ -283,16 +287,22 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.station_left_task_dic = {0: "reset", 1:"weld"}
         self.station_middle_task_dic = {0: "reset", 1:"weld_left", 2:"weld_middle", 3:"weld_right"}
         self.station_right_task_dic = {0: "reset", 1:"weld"}
-        self.station_state_left_dic = {0: "reset", 1:"moving", 2:"waiting", 3:"finished", 4:"resetting"}
-        self.station_state_middle_dic = {0: "reset", 1:"moving_left", 2:"moved_left", 3:"moving_right", 4:"moved_right", 5:"finished", 6:"resetting"}
-        self.station_state_left_dic = {0: "free_empty", 1:"picking", 2:"picked", 3:"placing"}
+        self.station_task_inner_left = 0
+        self.station_task_inner_middle = 0
+        self.station_task_inner_right = 0
+        self.station_task_outer_left = 0
+        self.station_task_outer_middle = 0
+        self.station_task_outer_right = 0
 
-        self.station_inner_left_task = 0
-        self.station_inner_middle_task = 0
-        self.station_inner_right_task = 0
-        
-        
-        self.station_inner_state = 0
+        self.station_state_left_dic = {0: "reset", 1:"moving", 2:"waiting", 3:"finished", 4:"resetting"}
+        self.station_state_middle_dic = {-1:"resetting", 0: "reset", 1:"moving_left", 2:"moved_left", 3:"moving_right", 4:"moved_right", 5:"finished"}
+        self.station_state_right_dic = {0: "reset", 1:"moving", 2:"waiting", 3:"finished", 4:"resetting"}
+        self.station_state_inner_left = 0
+        self.station_state_inner_middle = 0
+        self.station_state_inner_right = 0
+        self.station_state_outer_left = 0
+        self.station_state_outer_middle = 0
+        self.station_state_outer_right = 0
 
         self.pre_progress_buf = 0
         # scene.add(self.obj_cube)

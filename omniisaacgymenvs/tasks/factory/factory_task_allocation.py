@@ -495,12 +495,12 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         '''material long cube'''
         #first check the state
         if  self.convey_state == 0:
-            #cutting machine is free, we can process it
+            #conveyor is free, we can process it
             raw_cube_index = self.materials.find_next_raw_cube_index()
             #todo check convey startup
             if self.put_cube_on_conveyor(raw_cube_index):
                 self.materials.cube_states[raw_cube_index] = 1
-                self.materials.convey_index = raw_cube_index
+                self.materials.cube_convey_index = raw_cube_index
                 self.convey_state = 1
             else:
                 #todo
@@ -576,7 +576,9 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         pick_up_cut_index = self.materials.pick_up_cut_index
         if self.gripper_inner_state == 0:
             #gripper is free and empty todo
-            if pick_up_cut_index:
+            stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle
+            if pick_up_cut_index and not stations_are_full:
+                # making sure station is available before start picking
                 self.gripper_inner_task = 1
                 self.gripper_inner_state = 1    
                 #moving inner 
@@ -584,8 +586,8 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 dof_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_inner_state = 2
-                    self.gripper_inner_task = 2
-                    self.materials.cube_states[pick_up_cut_index] = 5
+                    self.gripper_inner_task = 3 if self.station_state_inner_middle else 2
+                    # self.materials.cube_states[pick_up_cut_index] = 5
                 # dof_pos_7_inner = inner_initial_pose + delta_pos
             else:
                 #no task to do, reset
@@ -598,13 +600,25 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 dof_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_inner_state = 2
-                    #check available laser station
-                    self.gripper_inner_task = 2
-                    self.materials.cube_states[pick_up_cut_index] = 5
+                    #check available laser station(always true, making sure station is available before start picking)
+                    self.gripper_inner_task = 3 if self.station_state_inner_middle else 2
             else:
                 #other picking task
                 a = 1
         elif self.gripper_inner_state == 2:
+            self.materials.cube_states[pick_up_cut_index] = 5
+            if self.gripper_inner_task == 2:
+                #place_cut_to_inner_station
+                target_pose = 1
+            elif self.gripper_inner_task == 3:
+                #place_cut_to_outer_station
+                target_pose = 2
+            else:
+                #other placing task
+                a = 1
+            dof_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
+
+        elif self.gripper_inner_state == 3:
             #gripper picked material
             if self.gripper_inner_task == 
             
