@@ -1,0 +1,45 @@
+# Objects info in task allocation 
+Dataset/3D_model/Part1/1_1.usd
+是上料管道的运输架
+
+
+
+omniisaacgymenvs/cfg/task/FactoryEnvTaskAllocation.yaml
+omniisaacgymenvs/cfg/task/FactoryTaskAllocation.yaml
+omniisaacgymenvs/tasks/factory/yaml/factory_asset_info_task_allocation.yaml
+omniisaacgymenvs/cfg/train/FactoryTaskAllocationPPO.yaml
+
+# 进度
+issac-sim 中旋转 90 90 -90
+
+# 下一步尝试用代码控制物体
+core API:
+https://docs.omniverse.nvidia.com/py/isaacsim/index.html
+https://docs.omniverse.nvidia.com/isaacsim/latest/advanced_tutorials/tutorial_advanced_omnigraph_shortcuts.html?highlight=control%20graph#controller-graphs controller
+ 
+
+Part1 上料输送轨道+激光除锈工位+下料输送轨道
+Part2 法兰料架x2，左+右
+Part3 固定物体
+Part4 龙门架静态
+Part5 运料框
+Part6 固定物体 气罐
+Part7 龙门架，下料抓手
+Part8 龙门架中间放料区
+Part9 上料抓手 
+Part10 激光切料区
+Part11 激光焊接区
+
+
+
+Part10 激光切料区
+    '''reset laser cutter'''
+    dof_pos_10 = torch.tensor([[0., 0]], device='cuda:0')
+    dof_vel_10 = torch.tensor([[0., 0]], device='cuda:0')
+    self.obj_part_10.set_joint_positions(dof_pos_10[0])
+    self.obj_part_10.set_joint_velocities(dof_vel_10[0])
+    '''start laser cutter'''
+    dof_pos_10 = torch.tensor([[-5, 0.35]], device='cuda:0')
+    dof_vel_10 = torch.tensor([[0., 0]], device='cuda:0')
+    self.obj_part_10.set_joint_positions(dof_pos_10[0])
+    self.obj_part_10.set_joint_velocities(dof_vel_10[0])
