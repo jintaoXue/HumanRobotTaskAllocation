@@ -351,135 +351,21 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             # In this policy, episode length is constant
             is_last_step = self.progress_buf[0] == self.max_episode_length - 1
             #initial pose: self.obj_0_3.get_world_poses() (tensor([[-8.3212,  2.2496,  2.7378]], device='cuda:0'), tensor([[ 0.9977, -0.0665,  0.0074,  0.0064]], device='cuda:0'))
-            # set obj_part_10 to static state
-            # dof_pos = self.obj_part_10.get_joint_positions(clone=False)
-            # dof_vel = self.obj_part_10.get_joint_velocities(clone=False)
-            # dof_pos = torch.tensor([[-3.6786e-07,  7.6532e-05]], device='cuda:0')
-            # dof_vel = torch.tensor([[1.8901e-05, 5.8689e-03]], device='cuda:0')
-
-            # dof_pos_2 = torch.tensor([[4.2702e-05, 1.3865e+00]], device='cuda:0')
-            # dof_vel_2 = torch.tensor([[1.3839e-06, 1.7030e-05]], device='cuda:0')
-
-            # self.obj_part_10.set_joint_positions(dof_pos[0])
-            # self.obj_part_10.set_joint_velocities(dof_vel[0])  
-       
-            # self.obj_part_10.set_joint_positions(dof_pos[0], indices=indices)
-            # self.obj_part_10.set_joint_velocities(dof_vel[0], indices=indices)
             if not self.materials.done():
                 self.post_conveyor_step()
                 self.post_cutting_machine_step()
-            
-            if self.progress_buf[0] <= 170:    
-                '''reset laser cutter'''
-                dof_pos_10 = torch.tensor([[0., 0]], device='cuda:0')
-                dof_vel_10 = torch.tensor([[0., 0]], device='cuda:0')
-                self.obj_part_10.set_joint_positions(dof_pos_10[0])
-                self.obj_part_10.set_joint_velocities(dof_vel_10[0]) 
-                '''reset Grippers (19 dofs)'''
-                self.obj_part_7.get_joint_positions(clone=False)
-                self.obj_part_7.get_joint_velocities(clone=False)
-                dof_pos_7 = torch.zeros(size=(1,19), device='cuda:0')
-                # dof_pos_2 = torch.tensor([[4.2702e-05, 1.3865e+00]], device='cuda:0')
-                # dof_vel_2 = torch.tensor([[1.3839e-06, 1.7030e-05]], device='cuda:0')
-                self.obj_part_7.set_joint_positions(dof_pos_7[0])
-                self.obj_part_7.set_joint_velocities(torch.zeros(dof_pos_7.shape, device='cuda:0')[0])
-                # self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/ConveyorBelt_A09_0_2/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:velocity').Set(-5)
-                # self._stage.GetPrimAtPath(f"/World/envs/env_1" + "/obj/ConveyorBelt_A09_0_2/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:velocity').Set(-5)
-                # self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/ConveyorBelt_A09_0_0/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:velocity').Set(-5)
-                # self._stage.GetPrimAtPath(f"/World/envs/env_1" + "/obj/ConveyorBelt_A09_0_0/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:velocity').Set(-5)
-            elif not self.catch_flag:
-                '''start laser cutter'''
-                dof_pos_10 = torch.tensor([[-5, 0.35]], device='cuda:0')
-                dof_vel_10 = torch.tensor([[0., 0]], device='cuda:0')
-                # self.obj_part_10.set_joint_position_targets(dof_pos_10[0])
-                self.obj_part_10.set_joint_positions(dof_pos_10[0])
-                self.obj_part_10.set_joint_velocities(dof_vel_10[0])
-
-                #Gantry grabber part7 + part9
-                #firstly control the part9
-                #1. get the material position
-                world_pose = (torch.tensor([[-21.2700,   2.5704,   1.9564]], device='cuda:0'), torch.tensor([[ 0.9589, -0.2821, -0.00,  0.000]], device='cuda:0'))
-                self.obj_part_9_manipulator.get_world_poses()
-                self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part9/manipulator2/robotiq_arg2f_base_link").GetAttribute('xformOp:translate')
-                dof_pos_7 = torch.tensor([[-2.4175e-07, -0.01148,  2.1637e-10, 0, 0, -1.36, 0,
-                    0, 0, 0, 0,  
-                    0.045, -0.045, -0.045, -0.045, 
-                    0, 0,  
-                    0.045,  0.045]], device='cuda:0')
-                # dof_pos_7 = torch.tensor([[-2.4175e-07, -0.01148,  2.1637e-10, 0, 0, -1.36,  
+                self.post_grippers_step()
+                # world_pose = (torch.tensor([[-21.2700,   2.5704,   1.9564]], device='cuda:0'), torch.tensor([[ 0.9589, -0.2821, -0.00,  0.000]], device='cuda:0'))
+                # self.obj_part_9_manipulator.get_world_poses()
+                # self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part9/manipulator2/robotiq_arg2f_base_link").GetAttribute('xformOp:translate')
+                # dof_pos_7 = torch.tensor([[-2.4175e-07, -0.01148,  2.1637e-10, 0, 0, -1.36, 0,
                 #     0, 0, 0, 0,  
-                #     0, 0, 0, 0, 
+                #     0.045, -0.045, -0.045, -0.045, 
                 #     0, 0,  
-                #     0,  0]], device='cuda:0')
-                self.obj_part_7.set_joint_positions(dof_pos_7[0])
-                
-                self.obj_part_7.set_joint_velocities(torch.zeros(dof_pos_7.shape, device='cuda:0')[0])
-                
-                self.obj_part_7.set_joint_efforts(torch.zeros(dof_pos_7.shape, device='cuda:0')[0])
-                self.obj_0_3.set_world_poses(positions=world_pose[0], orientations=world_pose[1])
-                if self.progress_buf[0] >= 180:
-                    self.catch_flag = True
-                    self.pre_progress_buf = self.progress_buf[0] - 0 
-            elif self.catch_flag and not self.put_flag:
-                delta_position = torch.tensor([[0,   0,   1]], device='cuda:0')
-                world_pose = (torch.tensor([[-21.2700,   2.5704,   1.9564]], device='cuda:0') + delta_position, torch.tensor([[ 0.9589, -0.2821, -0.00,  0.000]], device='cuda:0'))
-                dof_pos_7 = torch.tensor([[-2.4175e-07, -0.01148,  2.1637e-10, 0, 0, -1.36+1,  0,
-                    0, 0, 0, 0,  
-                    0.045, -0.045, -0.045, -0.045, 
-                    0, 0,  
-                    0.045,  0.045]], device='cuda:0')
-                self.obj_part_7.set_joint_positions(dof_pos_7[0])
-                self.obj_part_7.set_joint_velocities(torch.zeros(dof_pos_7.shape, device='cuda:0')[0])
-                self.obj_part_7.set_joint_efforts(torch.zeros(dof_pos_7.shape, device='cuda:0')[0])
-                self.obj_0_3.set_world_poses(positions=world_pose[0], orientations=world_pose[1])
-                if self.progress_buf[0] - self.pre_progress_buf >= 50:
-                    self.put_flag = True
-            elif self.catch_flag and self.put_flag:
-                delta_position = None
-                delta_position_manipulator = None
-                if not move_horizontal and not move_vertical:
-                    len_step = self.progress_buf[0] - self.pre_progress_buf - 50
-                    if len_step <= 50:
-                        #horizontal
-                        delta_position = torch.tensor([[0,   0,   1]], device='cuda:0') + torch.tensor([[0,   0.04,   0]], device='cuda:0')*len_step
-                        delta_position_manipulator = torch.tensor([[0, -0.04,  0, 0, 0, 0,  0,
-                            0, 0, 0, 0,  
-                            0, 0, 0, 0, 
-                            0, 0,  
-                            0, 0]], device='cuda:0')*len_step
-                    else:
-                        #vertical
-                        delta_position = torch.tensor([[0,   0,   1]], device='cuda:0') + torch.tensor([[0,   0.04,   0]], device='cuda:0')*len_step
-                        delta_position_manipulator = torch.tensor([[0, -0.04,  0, 0, 0, 0,  0,
-                            0, 0, 0, 0,  
-                            0, 0, 0, 0, 
-                            0, 0,  
-                            0,  0]], device='cuda:0')*len_step
-                world_pose = (torch.tensor([[-21.2700,   2.5704,   1.9564]], device='cuda:0') + delta_position, torch.tensor([[ 0.9589, -0.2821, -0.00,  0.000]], device='cuda:0'))
-                dof_pos_7 = torch.tensor([[-2.4175e-07, -0.01148,  2.1637e-10, 0, 0, -1.36+1,  0,
-                        0, 0, 0, 0,  
-                        0.045, -0.045, -0.045, -0.045, 
-                        0, 0,  
-                        0.045,  0.045]], device='cuda:0') + delta_position_manipulator
-                self.obj_part_7.set_joint_positions(dof_pos_7[0])
-                self.obj_part_7.set_joint_velocities(torch.zeros(dof_pos_7.shape, device='cuda:0')[0])
-                self.obj_part_7.set_joint_efforts(torch.zeros(dof_pos_7.shape, device='cuda:0')[0])
-                self.obj_0_3.set_world_poses(positions=world_pose[0], orientations=world_pose[1])
-                a = 1     
-                # self.obj_part_7.set_joint_position_targets(torch.zeros(dof_pos_7.shape, device='cuda:0')[0])
-                # self.obj_part_10.set_joint_velocities(dof_vel[0])  
-            # self._stage.
-            # if is_last_step:
-            #     # At this point, robot has executed RL policy. Now close gripper and lift (open-loop)
-            #     if self.cfg_task.env.close_and_lift:
-            #         self._close_gripper(
-            #             sim_steps=self.cfg_task.env.num_gripper_close_sim_steps
-            #         )
-            #         self._lift_gripper(
-            #             franka_gripper_width=0.0,
-            #             lift_distance=0.3,
-            #             sim_steps=self.cfg_task.env.num_gripper_lift_sim_steps,
-            #         )
+                #     0.045,  0.045]], device='cuda:0')
+                # self.obj_part_7.set_joint_efforts(torch.zeros(dof_pos_7.shape, device='cuda:0')[0])
+                # self.obj_0_3.set_world_poses(positions=world_pose[0], orientations=world_pose[1])
+                # if self.progress_buf[0] >= 180:
 
             # self.refresh_base_tensors()
             # self.refresh_env_tensors()
@@ -526,14 +412,14 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
     def post_cutting_machine_step(self):
         dof_pos_10 = None
         dof_vel_10 = torch.tensor([[0., 0]], device='cuda:0')
-        initial_pose = torch.tensor([[-5, 0]], device='cuda:0')
+        initial_pose = torch.tensor([[-5., 0]], device='cuda:0')
         end_pose = torch.tensor([[-5, 0.35]], device='cuda:0')
         cube_cut_index = self.materials.cube_cut_index
         if self.cutting_machine_state == 0:
             '''reseted laser cutter'''
             # delta_position = torch.tensor([[0., 0]], device='cuda:0')
             dof_pos_10 = initial_pose
-            if self.materials.cube_cut_index:
+            if cube_cut_index>=0:
                 self.cutting_machine_state = 1
         elif self.cutting_machine_state == 1:
             '''cutting cube'''
@@ -563,27 +449,28 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         self.obj_part_10.set_joint_velocities(dof_vel_10[0])   
 
     def post_grippers_step(self):
-        dof_pos_inner = None
-        dof_pos_outer = None
+        next_pos_inner = None
+        next_pos_outer = None
+        next_gripper_pose = torch.zeros(size=(20,), device='cuda:0')
         dof_vel = torch.zeros(size=(1,20), device='cuda:0')
         inner_initial_pose = torch.zeros(size=(1,10), device='cuda:0')
         outer_initial_pose = torch.zeros(size=(1,10), device='cuda:0')
         # outer_end_pose = torch.tensor([[-5, 0.35]], device='cuda:0')
         # outer_end_pose = torch.tensor([[-5, 0.35]], device='cuda:0')
         gripper_pose = self.obj_part_7.get_joint_positions(clone=False)
-        gripper_pose_inner = torch.index_select(gripper_pose, 1, [1,3,5,7,12,13,14,15,18,19])
-        gripper_pose_outer = torch.index_select(gripper_pose, 1, [0,2,4,6,8,9,10,11,16,17])
+        gripper_pose_inner = torch.index_select(gripper_pose, 1, torch.tensor([1,3,5,7,12,13,14,15,18,19], device='cuda'))
+        gripper_pose_outer = torch.index_select(gripper_pose, 1, torch.tensor([0,2,4,6,8,9,10,11,16,17], device='cuda'))
         pick_up_cut_index = self.materials.pick_up_cut_index
         if self.gripper_inner_state == 0:
             #gripper is free and empty todo
             stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle
-            if pick_up_cut_index and not stations_are_full:
+            if (pick_up_cut_index>=0) and not stations_are_full:
                 # making sure station is available before start picking
                 self.gripper_inner_task = 1
                 self.gripper_inner_state = 1    
                 #moving inner 
                 target_pose = torch.tensor([[-0.01148, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
-                dof_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
+                next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_inner_state = 2
                     self.gripper_inner_task = 3 if self.station_state_inner_middle else 2
@@ -591,13 +478,13 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 # dof_pos_7_inner = inner_initial_pose + delta_pos
             else:
                 #no task to do, reset
-                dof_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], inner_initial_pose[0], 'reset')
+                next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], inner_initial_pose[0], 'reset')
         elif self.gripper_inner_state == 1:
             #gripper is picking
             if self.gripper_inner_task == 1:
                 #pick cut cube
                 target_pose = torch.tensor([[-0.01148, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
-                dof_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
+                next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_inner_state = 2
                     #check available laser station(always true, making sure station is available before start picking)
@@ -616,18 +503,28 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             else:
                 #other placing task
                 a = 1
-            dof_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
+            next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
 
         elif self.gripper_inner_state == 3:
             #gripper picked material
-            if self.gripper_inner_task == 
+            a = 1
+            # if self.gripper_inner_task == 
             
         #merge inner and outer pose
-        # dof_pos =
-        # self.obj_part_7.set_joint_positions(dof_pos[0])
-        # self.obj_part_7.set_joint_velocities(dof_vel[0])
+        next_pos_outer = gripper_pose_outer[0]
+        # import copy
+        next_gripper_pose = self.merge_two_grippers_pose(next_gripper_pose, next_pos_inner, next_pos_outer)
+        self.obj_part_7.set_joint_positions(next_gripper_pose)
+        self.obj_part_7.set_joint_velocities(dof_vel[0])
         return 
-
+    def merge_two_grippers_pose(self, pose, pose_inner, pose_outer):
+        pose[0:7:2] = pose_outer[:4]
+        pose[1:8:2] = pose_inner[:4]
+        pose[8:12] = pose_outer[4:8]
+        pose[12:16] = pose_inner[4:8]
+        pose[16:18] = pose_outer[8:]
+        pose[18:] = pose_inner[8:]
+        return pose
     def get_gripper_moving_pose(self, gripper_pose : torch.Tensor, target_pose : torch.Tensor, task):
         #for one env pose generation
         ####debug
@@ -635,20 +532,21 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         # target_pose = torch.tensor([-0.01148, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045], device='cuda:0')
 
         #warning, revolution is 0 when doing picking task
+        THRESHOLD = 2e-3
         dofs = gripper_pose.shape[0]
         next_gripper_pose = torch.zeros(dofs, device='cuda:0')
         new_target_pose = torch.zeros(dofs, device='cuda:0')
         delta_pose = target_pose - gripper_pose
-        move_done = torch.where(torch.abs(delta_pose)<1e-3, True, False)
+        move_done = torch.where(torch.abs(delta_pose)<THRESHOLD, True, False)
         new_target_pose = torch.zeros(dofs, device='cuda:0')
         next_gripper_pose = torch.zeros(dofs, device='cuda:0')
         next_delta_pose = torch.zeros(dofs, device='cuda:0')
 
         manipulator_reset_pose = torch.zeros(6, device='cuda:0')
         delta_m = manipulator_reset_pose - gripper_pose[4:]
-        reset_done_m = torch.where(torch.abs(delta_m)<1e-3, True, False).all()
-        reset_done_revolution = torch.abs(gripper_pose[3]-0)<1e-3
-        reset_done_up_down = torch.abs(gripper_pose[2]-0)<1e-3
+        reset_done_m = torch.where(torch.abs(delta_m)<THRESHOLD, True, False).all()
+        reset_done_revolution = torch.abs(gripper_pose[3]-0)<THRESHOLD
+        reset_done_up_down = torch.abs(gripper_pose[2]-0)<THRESHOLD
 
         if task == 'place':
             reset_done_m = True
@@ -658,7 +556,8 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             return next_gripper_pose, next_delta_pose, True
         elif move_done[:4].all():
             #if in out, left right, up down, revolution done, control manipulator
-            return self.get_gripper_pose_helper(gripper_pose, target_pose), False
+            new_target_pose = target_pose
+            # return self.get_gripper_pose_helper(gripper_pose, target_pose), False
         elif move_done[:3].all():
             if  reset_done_m:
                 #move revolution, freeze others
@@ -709,15 +608,15 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 #freeze [:4], do the manipulator reset
                 new_target_pose[:4] = gripper_pose[:4]
                 new_target_pose[4:] = manipulator_reset_pose
-
-        return self.get_gripper_pose_helper(gripper_pose, new_target_pose), False
+        next_gripper_pose, delta_pose = self.get_gripper_pose_helper(gripper_pose, new_target_pose)
+        return next_gripper_pose, delta_pose, False
 
     
     def get_gripper_pose_helper(self, gripper_pose, target_pose):
         delta_pose = target_pose - gripper_pose
         sign = torch.sign(delta_pose)
         next_gripper_pose = sign*self.operator_gripper + gripper_pose
-        next_pose_not_reach_target = torch.sign((target_pose - next_gripper_pose)*delta_pose)
+        next_pose_not_reach_target = torch.where((target_pose - next_gripper_pose)*delta_pose>0, True, False)
         next_gripper_pose = torch.where(next_pose_not_reach_target, next_gripper_pose, target_pose)
         delta_pose = next_gripper_pose - gripper_pose
         return next_gripper_pose, delta_pose

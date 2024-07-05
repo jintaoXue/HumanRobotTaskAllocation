@@ -88,7 +88,7 @@ class Materials(object):
         pass
 
     def done(self):
-        return not any(self.cube_states)
+        return max(self.cube_states) == -1
     
     def find_next_raw_cube_index(self):
         return self.cube_states.index(0)
@@ -260,7 +260,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.operator_gripper = torch.tensor([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], device='cuda:0')
         self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_to_inner_station", 3:"place_cut_to_outer_station"}
         self.gripper_inner_task = 0
-        self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"placing", 4:"placed"}
+        self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"placing", 3:"placed"}
         self.gripper_inner_state = 0
 
         self.gripper_outer_task_dic = {0: "reset", 1:"move_inner", 2:"down", 3:"grip", 4:"lifting"}
