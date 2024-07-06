@@ -112,8 +112,8 @@ class RLTask(RLTaskInterface):
         self.camera_target = [0, 0.9, 3]
 
         # view_up_down 
-        self.camera_position = [-22, 10, 20]
-        self.camera_target = [-22, 0.9, 3]
+        # self.camera_position = [-22, 10, 20]
+        # self.camera_target = [-22, 0.9, 3]
 
         self.viewport_camera_width = 1280
         self.viewport_camera_height = 720

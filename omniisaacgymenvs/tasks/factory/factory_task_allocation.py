@@ -490,7 +490,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.gripper_inner_task = 1
                 self.gripper_inner_state = 1    
                 #moving inner 
-                target_pose = torch.tensor([[0.5, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                target_pose = torch.tensor([[0.5, 0, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_inner_state = 2
@@ -505,7 +505,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             #gripper is picking
             if self.gripper_inner_task == 1:
                 #picking cut cube
-                target_pose = torch.tensor([[0.5, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                target_pose = torch.tensor([[0.5, 0, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_inner_state = 2
@@ -540,11 +540,13 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             ref_pose = self.obj_part_9_manipulator.get_world_poses()
             # ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device='cuda:0')
             self.materials.cube_list[pick_up_cut_index].set_world_poses(
-                positions=ref_pose[0]+torch.tensor([[-5,   0,   0]], device='cuda:0'), orientations=ref_pose[1])
+                positions=ref_pose[0]+torch.tensor([[-0.5,   1.5,   -2]], device='cuda:0'), orientations=ref_pose[1])
+            self.materials.cube_list[pick_up_cut_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+            self.materials.cube_list[pick_up_cut_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
             # self.materials.cube_list[pick_up_cut_index].set_world_poses(
             #     positions=ref_pose[0]+torch.tensor([[-1,   0,   0]], device='cuda:0'), 
             #     orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
-            
+            a = 1
         elif self.gripper_inner_state == 3:
             #gripper picked material
             a = 1
@@ -556,6 +558,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         next_gripper_pose = self.merge_two_grippers_pose(next_gripper_pose, next_pos_inner, next_pos_outer)
         self.obj_part_7.set_joint_positions(next_gripper_pose)
         self.obj_part_7.set_joint_velocities(dof_vel[0])
+        self.obj_part_7.set_joint_efforts(dof_vel[0])
         return 
     def merge_two_grippers_pose(self, pose, pose_inner, pose_outer):
         pose[0:7:2] = pose_outer[:4]
@@ -611,7 +614,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             if  reset_done_m:
                 #move revolution, freeze others
                 new_target_pose[:3] = gripper_pose[:3]
-                new_target_pose[4:] = gripper_pose[4:]
+                new_target_pose[4:] = manipulator_reset_pose
                 new_target_pose[3] = target_pose[3]
             else:
                 #freeze [:4], do the manipulator reset
@@ -620,7 +623,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         elif move_done[:2].all():
             #check manipulator reset done
             if reset_done_m:
-                new_target_pose[4:] = gripper_pose[4:]
+                new_target_pose[4:] = manipulator_reset_pose
                 #check revolution reset done
                 if reset_done_revolution:
                     # do the up down 
@@ -637,7 +640,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         else:
             #check manipulator reset done
             if reset_done_m:
-                new_target_pose[4:] = gripper_pose[4:]
+                new_target_pose[4:] = manipulator_reset_pose
                 #check revolution reset done
                 if reset_done_revolution:
                     new_target_pose[3] = gripper_pose[3]
