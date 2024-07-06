@@ -65,7 +65,7 @@ class Materials(object):
         self.hoop_list = hoop_list
         self.bending_tube_list = bending_tube_list    
 
-        self.materials_flag_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"picking_up_cut", 
+        self.materials_state_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"picking_up_cut", 
                                    6:"placed_station_inner", 7:"placed_station_outer", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
 
         self.cube_states = [0]*len(self.cube_list)
@@ -93,6 +93,11 @@ class Materials(object):
         return max(self.cube_states) == -1
     
     def find_next_raw_cube_index(self):
+        # index 
+        try:
+            self.cube_states.index(0)
+        except:
+            return -1
         return self.cube_states.index(0)
     
 class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):

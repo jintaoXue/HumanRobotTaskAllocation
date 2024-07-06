@@ -386,7 +386,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             #conveyor is free, we can process it
             raw_cube_index = self.materials.find_next_raw_cube_index()
             #todo check convey startup
-            if self.put_cube_on_conveyor(raw_cube_index):
+            if raw_cube_index>=0 and self.put_cube_on_conveyor(raw_cube_index):
                 self.materials.cube_states[raw_cube_index] = 1
                 self.materials.cube_convey_index = raw_cube_index
                 self.convey_state = 1
@@ -410,13 +410,15 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 else:
                     #keep conveying the cube
                     obj_world_pose[0][0][0] -=  0.2
-                    obj.set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
-                    obj.set_velocities(torch.zeros((1,6), device='cuda:0'))
+                obj.set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
+                obj.set_velocities(torch.zeros((1,6), device='cuda:0'))
                 return
             elif obj_state in range(2,4):
                 #2:"conveyed", 3:"cutting", 4:"cut_done",
                 # obj.set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
                 # obj.set_velocities(torch.zeros((1,6), device='cuda:0'))
+                obj.set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
+                obj.set_velocities(torch.zeros((1,6), device='cuda:0'))
                 return
             elif obj_state == 5:
                 self.convey_state = 0
@@ -488,7 +490,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.gripper_inner_task = 1
                 self.gripper_inner_state = 1    
                 #moving inner 
-                target_pose = torch.tensor([[-0.01148, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                target_pose = torch.tensor([[0.5, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_inner_state = 2
@@ -503,7 +505,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             #gripper is picking
             if self.gripper_inner_task == 1:
                 #picking cut cube
-                target_pose = torch.tensor([[-0.01148, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                target_pose = torch.tensor([[0.5, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_inner_state = 2
@@ -536,8 +538,13 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 #other placing task
                 a = 1
             ref_pose = self.obj_part_9_manipulator.get_world_poses()
-            ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device='cuda:0')
-            self.materials.cube_list[pick_up_cut_index].set_world_poses(positions=ref_pose[0], orientations=ref_pose[1])
+            # ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device='cuda:0')
+            self.materials.cube_list[pick_up_cut_index].set_world_poses(
+                positions=ref_pose[0]+torch.tensor([[-5,   0,   0]], device='cuda:0'), orientations=ref_pose[1])
+            # self.materials.cube_list[pick_up_cut_index].set_world_poses(
+            #     positions=ref_pose[0]+torch.tensor([[-1,   0,   0]], device='cuda:0'), 
+            #     orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
+            
         elif self.gripper_inner_state == 3:
             #gripper picked material
             a = 1
@@ -568,7 +575,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
 
         #warning, revolution is 0 when doing picking task
         THRESHOLD_A = 0.05
-        THRESHOLD_B = 0.01
+        THRESHOLD_B = 0.04
         threshold = torch.tensor([THRESHOLD_A]*3 + [THRESHOLD_B]*7, device='cuda:0')
         dofs = gripper_pose.shape[0]
         next_gripper_pose = torch.zeros(dofs, device='cuda:0')
@@ -578,10 +585,15 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         new_target_pose = torch.zeros(dofs, device='cuda:0')
         next_gripper_pose = torch.zeros(dofs, device='cuda:0')
         next_delta_pose = torch.zeros(dofs, device='cuda:0')
-
-        manipulator_reset_pose = torch.zeros(6, device='cuda:0')
+        #todo
+        # manipulator_reset_pose = torch.zeros(6, device='cuda:0')
+        manipulator_reset_pose = torch.tensor([1.8084e-02, -2.9407e-02, -2.6935e-02, -1.6032e-02,  3.3368e-02,  3.2771e-02], device='cuda:0')
         delta_m = manipulator_reset_pose - gripper_pose[4:]
         reset_done_m = torch.where(torch.abs(delta_m)<THRESHOLD_B, True, False).all()
+        '''todo, manipulator faces reseting and move done problems'''
+        reset_done_m = True
+        move_done[4:] = True
+        '''todo, manipulator faces reseting and move done problems'''
         reset_done_revolution = torch.abs(gripper_pose[3]-0)<THRESHOLD_B
         reset_done_up_down = torch.abs(gripper_pose[2]-0)<THRESHOLD_A
 
