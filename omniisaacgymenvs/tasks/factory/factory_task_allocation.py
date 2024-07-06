@@ -355,6 +355,8 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.post_conveyor_step()
                 self.post_cutting_machine_step()
                 self.post_grippers_step()
+                self.post_weld_station_step()
+                self.post_welder_step()
                 # world_pose = (torch.tensor([[-21.2700,   2.5704,   1.9564]], device='cuda:0'), torch.tensor([[ 0.9589, -0.2821, -0.00,  0.000]], device='cuda:0'))
                 # self.obj_part_9_manipulator.get_world_poses()
                 # self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part9/manipulator2/robotiq_arg2f_base_link").GetAttribute('xformOp:translate')
@@ -392,18 +394,34 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 #todo
                 pass
         elif self.convey_state == 1:
+            #the threhold means the cube is right under the gripper
+            threhold = -20.99342
             obj_index = self.materials.cube_convey_index
             obj :RigidPrimView = self.materials.cube_list[obj_index]
             obj_state = self.materials.cube_states[obj_index]
-            delta_pose = obj.get_world_poses()[0] - torch.tensor(self.conveyor_pose_list[-1], device='cuda:0') 
-            #todo check the threhold
-            if obj_state == 1 and delta_pose[0][0] < 0.5:
-                #conveyed to the cutting machine
-                self.materials.cube_states[obj_index] = 2
-                self.materials.cube_cut_index = obj_index
-            if obj_state == 5:
+            obj_world_pose = obj.get_world_poses()
+            # delta_pose = obj_world_pose[0] - torch.tensor(self.conveyor_pose_list[-1], device='cuda:0') 
+            #check the threhold to know whether the cude arrived at cutting position
+            if obj_state == 1:
+                if obj_world_pose[0][0][0] <= threhold:
+                    #conveyed to the cutting machine
+                    self.materials.cube_states[obj_index] = 2
+                    self.materials.cube_cut_index = obj_index
+                else:
+                    #keep conveying the cube
+                    obj_world_pose[0][0][0] -=  0.2
+                    obj.set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
+                    obj.set_velocities(torch.zeros((1,6), device='cuda:0'))
+                return
+            elif obj_state in range(2,4):
+                #2:"conveyed", 3:"cutting", 4:"cut_done",
+                # obj.set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
+                # obj.set_velocities(torch.zeros((1,6), device='cuda:0'))
+                return
+            elif obj_state == 5:
                 self.convey_state = 0
                 self.materials.cube_convey_index = -1
+        return        
 
     def put_cube_on_conveyor(self, cude_index) -> bool:
         #todo 
@@ -451,6 +469,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
     def post_grippers_step(self):
         next_pos_inner = None
         next_pos_outer = None
+        delta_pos = None
         next_gripper_pose = torch.zeros(size=(20,), device='cuda:0')
         dof_vel = torch.zeros(size=(1,20), device='cuda:0')
         inner_initial_pose = torch.zeros(size=(1,10), device='cuda:0')
@@ -478,11 +497,12 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 # dof_pos_7_inner = inner_initial_pose + delta_pos
             else:
                 #no task to do, reset
+                self.gripper_inner_task = 0
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], inner_initial_pose[0], 'reset')
         elif self.gripper_inner_state == 1:
             #gripper is picking
             if self.gripper_inner_task == 1:
-                #pick cut cube
+                #picking cut cube
                 target_pose = torch.tensor([[-0.01148, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
@@ -493,18 +513,31 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 #other picking task
                 a = 1
         elif self.gripper_inner_state == 2:
+            #gripper is placeing
             self.materials.cube_states[pick_up_cut_index] = 5
             if self.gripper_inner_task == 2:
                 #place_cut_to_inner_station
-                target_pose = 1
+                target_pose = torch.tensor([[2.82314, 0, -1.6, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
+                next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
+                if move_done:
+                    self.gripper_inner_state = 3
+                    self.materials.cube_states[pick_up_cut_index] = 6
+                    self.station_state_inner_middle = 1
             elif self.gripper_inner_task == 3:
                 #place_cut_to_outer_station
-                target_pose = 2
+                #todo checking collision with outer gripper
+                target_pose = torch.tensor([[2.82314 + 3.34, 0, -1.6, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
+                next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
+                if move_done:
+                    self.gripper_inner_state = 3
+                    self.materials.cube_states[pick_up_cut_index] = 7
+                    self.station_state_inner_middle = 0
             else:
                 #other placing task
                 a = 1
-            next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
-
+            ref_pose = self.obj_part_9_manipulator.get_world_poses()
+            ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device='cuda:0')
+            self.materials.cube_list[pick_up_cut_index].set_world_poses(positions=ref_pose[0], orientations=ref_pose[1])
         elif self.gripper_inner_state == 3:
             #gripper picked material
             a = 1
@@ -525,6 +558,8 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         pose[16:18] = pose_outer[8:]
         pose[18:] = pose_inner[8:]
         return pose
+    # def get_material_pose_by_ref_pose(self, ref_pose, delta_pos):
+
     def get_gripper_moving_pose(self, gripper_pose : torch.Tensor, target_pose : torch.Tensor, task):
         #for one env pose generation
         ####debug
@@ -532,21 +567,23 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         # target_pose = torch.tensor([-0.01148, 0, -1.36, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045], device='cuda:0')
 
         #warning, revolution is 0 when doing picking task
-        THRESHOLD = 2e-3
+        THRESHOLD_A = 0.05
+        THRESHOLD_B = 0.01
+        threshold = torch.tensor([THRESHOLD_A]*3 + [THRESHOLD_B]*7, device='cuda:0')
         dofs = gripper_pose.shape[0]
         next_gripper_pose = torch.zeros(dofs, device='cuda:0')
         new_target_pose = torch.zeros(dofs, device='cuda:0')
         delta_pose = target_pose - gripper_pose
-        move_done = torch.where(torch.abs(delta_pose)<THRESHOLD, True, False)
+        move_done = torch.where(torch.abs(delta_pose)<threshold, True, False)
         new_target_pose = torch.zeros(dofs, device='cuda:0')
         next_gripper_pose = torch.zeros(dofs, device='cuda:0')
         next_delta_pose = torch.zeros(dofs, device='cuda:0')
 
         manipulator_reset_pose = torch.zeros(6, device='cuda:0')
         delta_m = manipulator_reset_pose - gripper_pose[4:]
-        reset_done_m = torch.where(torch.abs(delta_m)<THRESHOLD, True, False).all()
-        reset_done_revolution = torch.abs(gripper_pose[3]-0)<THRESHOLD
-        reset_done_up_down = torch.abs(gripper_pose[2]-0)<THRESHOLD
+        reset_done_m = torch.where(torch.abs(delta_m)<THRESHOLD_B, True, False).all()
+        reset_done_revolution = torch.abs(gripper_pose[3]-0)<THRESHOLD_B
+        reset_done_up_down = torch.abs(gripper_pose[2]-0)<THRESHOLD_A
 
         if task == 'place':
             reset_done_m = True
@@ -621,8 +658,12 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         delta_pose = next_gripper_pose - gripper_pose
         return next_gripper_pose, delta_pose
     
-    def get_cube_moving_pose_from_gripper(self):
-        pass
+    def post_weld_station_step(self):
+        return
+    
+    def post_welder_step(self):
+        return
+    
 
     async def post_physics_step_async(self):
         """Step buffers. Refresh tensors. Compute observations and reward. Reset environments."""

@@ -58,13 +58,15 @@ import omni.isaac.core.utils.stage as stage_utils
 from omni.isaac.core.utils.stage import get_current_stage
 from omni.isaac.core.articulations import ArticulationView
 
+from omni.usd import get_world_transform_matrix, get_local_transform_matrix
 class Materials(object):
     def __init__(self, cube_list : list, hoop_list : list, bending_tube_list : list) -> None: 
         self.cube_list = cube_list
         self.hoop_list = hoop_list
         self.bending_tube_list = bending_tube_list    
 
-        self.materials_flag_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"picking_up_cut", 5:"placed_station_inner", 6:"combine_l", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
+        self.materials_flag_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"picking_up_cut", 
+                                   6:"placed_station_inner", 7:"placed_station_outer", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
 
         self.cube_states = [0]*len(self.cube_list)
         self.hoop_states = [0]*len(self.hoop_list)
@@ -257,10 +259,11 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # self.max_speed_left_right = 0.1
         # self.max_speed_up_down = 0.1
         # self.max_speed_grip = 0.1
-        self.operator_gripper = torch.tensor([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], device='cuda:0')
+        speed = 0.3
+        self.operator_gripper = torch.tensor([speed]*10, device='cuda:0')
         self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_to_inner_station", 3:"place_cut_to_outer_station"}
         self.gripper_inner_task = 0
-        self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"placing", 3:"placed"}
+        self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"placing"}
         self.gripper_inner_state = 0
 
         self.gripper_outer_task_dic = {0: "reset", 1:"move_inner", 2:"down", 3:"grip", 4:"lifting"}
@@ -295,7 +298,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.station_task_outer_right = 0
 
         self.station_state_left_dic = {0: "reset", 1:"moving", 2:"waiting", 3:"finished", 4:"resetting"}
-        self.station_state_middle_dic = {-1:"resetting", 0: "reset", 1:"moving_left", 2:"moved_left", 3:"moving_right", 4:"moved_right", 5:"finished"}
+        self.station_state_middle_dic = {-1:"resetting", 0: "reset", 1:"placed", 2:"moving_left", 3:"moved_left", 4:"moving_right", 5:"moved_right", 6:"finished"}
         self.station_state_right_dic = {0: "reset", 1:"moving", 2:"waiting", 3:"finished", 4:"resetting"}
         self.station_state_inner_left = 0
         self.station_state_inner_middle = 0
@@ -303,7 +306,12 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.station_state_outer_left = 0
         self.station_state_outer_middle = 0
         self.station_state_outer_right = 0
-
+        
+        # prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part9/manipulator2/robotiq_arg2f_base_link")
+        # prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part11/node/Station0")
+        # matrix = get_world_transform_matrix(prim)
+        # translate = matrix.ExtractTranslation()
+        # rotation: Gf.Rotation = matrix.ExtractRotation()
         self.pre_progress_buf = 0
         # scene.add(self.obj_cube)
         # scene.add(self.obj_0_2_2)

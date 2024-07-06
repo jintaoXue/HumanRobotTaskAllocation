@@ -103,13 +103,18 @@ class RLTask(RLTaskInterface):
         self.rendering_interval = self._task_cfg.get("renderingInterval", 1)
 
         # parse default viewport camera position and lookat target and resolution (width, height)
-        # self.camera_position = [36, 38, 16]
+        # self.camera_position = [20, 20, 16]
         # self.camera_position = [-41, -3, 10]
-        self.camera_position = [-33, -9, 15]
-        self.camera_target = [-25, 7.6, 4.1]
+        # self.camera_position = [-33, -9, 15]
+        # self.camera_target = [-25, 7.6, 4.1]
 
         self.camera_position = [-30, 0.99, 3.8]
-        self.camera_target = [-25, 0.9, 3]
+        self.camera_target = [0, 0.9, 3]
+
+        # view_up_down 
+        self.camera_position = [-22, 10, 20]
+        self.camera_target = [-22, 0.9, 3]
+
         self.viewport_camera_width = 1280
         self.viewport_camera_height = 720
         if "viewport" in self._task_cfg:
