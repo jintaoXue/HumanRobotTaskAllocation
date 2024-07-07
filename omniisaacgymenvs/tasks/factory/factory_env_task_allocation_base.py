@@ -59,11 +59,14 @@ from omni.isaac.core.utils.stage import get_current_stage
 from omni.isaac.core.articulations import ArticulationView
 
 from omni.usd import get_world_transform_matrix, get_local_transform_matrix
+
 class Materials(object):
-    def __init__(self, cube_list : list, hoop_list : list, bending_tube_list : list) -> None: 
+    def __init__(self, cube_list : list, hoop_list : list, bending_tube_list : list, upper_tube_list: list) -> None:
+
         self.cube_list = cube_list
+        self.upper_tube_list = upper_tube_list
         self.hoop_list = hoop_list
-        self.bending_tube_list = bending_tube_list    
+        self.bending_tube_list = bending_tube_list
 
         self.materials_state_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"picking_up_cut", 
                                    6:"placed_station_inner", 7:"placed_station_outer", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
@@ -71,15 +74,19 @@ class Materials(object):
         self.cube_states = [0]*len(self.cube_list)
         self.hoop_states = [0]*len(self.hoop_list)
         self.bending_tube_states = [0]*len(self.bending_tube_list)
+        self.upper_tube_states = [0]*len(self.upper_tube_list)
 
-        self.cube_poses = self.get_world_poses(self.cube_list)
-        self.hoop_poses = self.get_world_poses(self.hoop_list)
-        self.bending_tube_poses = self.get_world_poses(self.bending_tube_list)
-        
+        # self.cube_poses = self.get_world_poses(self.cube_list)
+        # self.hoop_poses = self.get_world_poses(self.hoop_list)
+        # self.bending_tube_poses = self.get_world_poses(self.bending_tube_list)
+
+        # self.raw_cube_index = -1
+        # self.process_groups = {}
+
         self.cube_convey_index = -1
         self.cube_cut_index = -1
-        self.pick_up_cut_index = -1
-        
+        self.pick_up_place_cut_index = -1
+
     def get_world_poses(self, list):
         poses = []
         for obj in list:
@@ -91,14 +98,38 @@ class Materials(object):
 
     def done(self):
         return max(self.cube_states) == -1
-    
+
     def find_next_raw_cube_index(self):
         # index 
         try:
-            self.cube_states.index(0)
+            return self.cube_states.index(0)
         except:
             return -1
-        return self.cube_states.index(0)
+        # return self.cube_states.index(0)
+    
+    def find_next_raw_upper_tube_index(self):
+        # index 
+        try:
+            return self.upper_tube_states.index(0)
+        except:
+            return -1
+        # return self.upper_tube_states.index(0)
+    
+    def find_next_raw_hoop_index(self):
+        # index 
+        try:
+            return self.hoop_states.index(0)
+        except:
+            return -1
+        # return self.hoop_states.index(0)
+    
+    def find_next_raw_bending_tube_index(self):
+        # index 
+        try:
+            return self.bending_tube_states.index(0)
+        except:
+            return -1
+        # return self.bending_tube_states.index(0)
     
 class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
     def __init__(self, name, sim_config, env) -> None:
@@ -192,11 +223,6 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         #     name="ConveyorBelt_A08/Rollers",
         #     track_contact_forces=True,
         # )
-        self.obj_0_3 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/obj_0_3",
-            name="obj_0_3",
-            track_contact_forces=True,
-        )
         self.obj_part_10 = ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/part10", name="obj_part_10", reset_xform_properties=False
         )
@@ -224,7 +250,27 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.obj_2_loader_1 =  ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/part2/Loaders/Loader1", name="obj_2_loader_1", reset_xform_properties=False
         )
-        
+        self.materials_cube_0 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/cube_0",
+            name="cube_0",
+            track_contact_forces=True,
+        )
+        self.materials_hoop_0 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/hoop_0",
+            name="hoop_0",
+            track_contact_forces=True,
+        )
+        self.materials_bending_tube_0 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tube_0",
+            name="bending_tube_0",
+            track_contact_forces=True,
+        )
+        self.materials_upper_tube_0 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tube_0",
+            name="upper_tube_0",
+            track_contact_forces=True,
+        )
+
         scene.add(self.obj_11_station_0)
         scene.add(self.obj_11_station_1)
         scene.add(self.obj_11_welding_0)
@@ -242,9 +288,13 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         scene.add(self.obj_0_1)
         scene.add(self.obj_belt_0)
         scene.add(self.obj_belt_1)
-        scene.add(self.obj_0_3)
+        scene.add(self.materials_cube_0)
+        scene.add(self.materials_hoop_0)
+        scene.add(self.materials_bending_tube_0)
+        scene.add(self.materials_upper_tube_0)
         #materials states
-        self.materials : Materials = Materials([self.obj_0_3], [], [])
+        self.materials : Materials = Materials(cube_list=[self.materials_cube_0], hoop_list=[self.materials_hoop_0], 
+                                               bending_tube_list=[self.materials_bending_tube_0], upper_tube_list=[self.materials_upper_tube_0])
         # self.materials_flag_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_cut", 
         # 5:"down", 6:"combine_l", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
         # conveyor
@@ -292,26 +342,28 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         #station
         # self.welder_inner_oper_time = 10
         self.operator_station = torch.tensor([0.1, 0.1, 0.1, 0.1], device='cuda:0')
-        self.station_left_task_dic = {0: "reset", 1:"weld"}
-        self.station_middle_task_dic = {0: "reset", 1:"weld_left", 2:"weld_middle", 3:"weld_right"}
-        self.station_right_task_dic = {0: "reset", 1:"weld"}
+        self.station_task_left_dic = {0: "reset", 1:"weld"}
+        self.station_state_left_dic = {0: "reset_empty", 1:"loaded", 2:"rotating", 3:"waiting", 4:"finished", -1:"resetting"}
         self.station_task_inner_left = 0
-        self.station_task_inner_middle = 0
-        self.station_task_inner_right = 0
         self.station_task_outer_left = 0
-        self.station_task_outer_middle = 0
-        self.station_task_outer_right = 0
-
-        self.station_state_left_dic = {0: "reset", 1:"moving", 2:"waiting", 3:"finished", 4:"resetting"}
-        self.station_state_middle_dic = {-1:"resetting", 0: "reset", 1:"placed", 2:"moving_left", 3:"moved_left", 4:"moving_right", 5:"moved_right", 6:"finished"}
-        self.station_state_right_dic = {0: "reset", 1:"moving", 2:"waiting", 3:"finished", 4:"resetting"}
         self.station_state_inner_left = 0
-        self.station_state_inner_middle = 0
-        self.station_state_inner_right = 0
         self.station_state_outer_left = 0
+
+        self.station_middle_task_dic = {0: "reset", 1:"weld_left", 2:"weld_middle", 3:"weld_right"}
+        self.station_state_middle_dic = {-1:"resetting", 0: "reset_empty", 1:"placed", 2:"welding_left", 3:"welding_right", 4:"welding_up", 6:"finished"}
+        self.station_state_inner_middle = 0
         self.station_state_outer_middle = 0
-        self.station_state_outer_right = 0
+        self.station_task_inner_middle = 0
+        self.station_task_outer_middle = 0
         
+        self.station_right_task_dic = {0: "reset", 1:"weld"}
+        self.station_state_right_dic = {0: "reset_empty", 1:"placed", 2:"moving", 3:"waiting", 4:"finished", -1:"resetting"}
+        self.station_state_inner_right = 0
+        self.station_state_outer_right = 0
+        self.station_task_outer_right = 0
+        self.station_task_inner_right = 0
+        
+        self.process_groups = {}
         # prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part9/manipulator2/robotiq_arg2f_base_link")
         # prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part11/node/Station0")
         # matrix = get_world_transform_matrix(prim)
@@ -326,6 +378,21 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # scene.add(self.frankas._rfingers)
         # scene.add(self.frankas._fingertip_centered)
         return
+    
+    def add_next_group_to_be_processed(self, cube_index : int):
+        upper_tube_index = self.materials.find_next_raw_upper_tube_index()
+        self.materials.upper_tube_states[upper_tube_index] = 1
+        hoop_index = self.materials.find_next_raw_hoop_index()
+        self.materials.hoop_states[hoop_index] = 1
+        bending_tube_index = self.materials.find_next_raw_bending_tube_index()
+        self.materials.bending_tube_states[bending_tube_index] = 1
+        #todo
+        station_inner_available = self.station_state_inner_middle <=0 and self.station_state_inner_left<=0 and self.station_state_inner_right<=0
+        # station_outer_available = self.station_state_outer_middle <=0 and self.station_state_outer_left<=0 and self.station_state_outer_right<=0
+        weld_station = 'inner' if station_inner_available else 'outer'
+        self.process_groups[cube_index] = {'upper_tube_index':upper_tube_index,  'hoop_index':hoop_index, 'bending_tube_index':bending_tube_index, 
+                                           'weld_station': weld_station}
+        return 
 
     def initialize_views(self, scene) -> None:
         """Initialize views for extension workflow."""
