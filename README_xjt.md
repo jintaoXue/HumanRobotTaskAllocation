@@ -43,3 +43,7 @@ Part10 激光切料区
     dof_vel_10 = torch.tensor([[0., 0]], device='cuda:0')
     self.obj_part_10.set_joint_positions(dof_pos_10[0])
     self.obj_part_10.set_joint_velocities(dof_vel_10[0])
+
+#7.12
+还差什么部分：
+self.station_state_inner_left = 4结束之后怎么复原

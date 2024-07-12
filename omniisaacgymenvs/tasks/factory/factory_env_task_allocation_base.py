@@ -68,8 +68,12 @@ class Materials(object):
         self.hoop_list = hoop_list
         self.bending_tube_list = bending_tube_list
 
-        self.materials_state_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"picking_up_cut", 
-                                   6:"placed_station_inner", 7:"placed_station_outer", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
+        self.cube_state_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_place_cut", 
+                                   6:"placed_station_inner", 7:"placed_station_outer", 7:"welding_left", 8:"welding_right", 9:"welding_upper",
+                                   10:"process_done", 11:"pick_up_place_product"}
+        self.hoop_state_dic = {-1:"done", 0:"wait", 1:"loading", 2:"loaded", 3:"" }
+        self.bending_tube_state_dic = {}
+        self.upper_tube_state_dic = {}
 
         self.cube_states = [0]*len(self.cube_list)
         self.hoop_states = [0]*len(self.hoop_list)
@@ -85,7 +89,12 @@ class Materials(object):
 
         self.cube_convey_index = -1
         self.cube_cut_index = -1
-        self.pick_up_place_cut_index = -1
+        self.pick_up_place_cube_index = -1
+        #for inner station
+        self.inner_hoop_processing_index = -1
+        self.inner_cube_processing_index = -1
+        self.inner_bending_tube_processing_index = -1
+        self.inner_upper_tube_processing_index = -1
 
     def get_world_poses(self, list):
         poses = []
@@ -235,6 +244,15 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.obj_11_station_0 =  ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/part11/node/Station0", name="obj_11_station_0", reset_xform_properties=False
         )
+        self.obj_11_station_0_revolution = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/part11/node/Station0/revolution", name="Station0/revolution", reset_xform_properties=False
+        )
+        self.obj_11_station_0_middle = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/part11/node/Station0/middle_left", name="Station0/middle_left", reset_xform_properties=False
+        )
+        self.obj_11_station_0_right = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/part11/node/Station0/right", name="Station0/right", reset_xform_properties=False
+        )
         self.obj_11_station_1 =  ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/part11/node/Station1", name="obj_11_station_1", reset_xform_properties=False
         )
@@ -316,7 +334,8 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # self.max_speed_grip = 0.1
         speed = 0.3
         self.operator_gripper = torch.tensor([speed]*10, device='cuda:0')
-        self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_to_inner_station", 3:"place_cut_to_outer_station"}
+        self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_to_inner_station", 3:"place_cut_to_outer_station", 
+                                       4:"pick_upper_tube", 5:"place_upper_tube_to_inner", 5:"place_upper_tube_to_outer"}
         self.gripper_inner_task = 0
         self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"placing"}
         self.gripper_inner_state = 0
@@ -328,10 +347,11 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
 
         #welder 
         # self.max_speed_welder = 0.1
-        self.welder_oper_time = 10
-        self.operator_welder = torch.tensor([0.1], device='cuda:0')
-        self.welder_task_dic = {0: "reset", 1:"weld_middle", 2:"weld_left", 3:"weld_right"}
-        self.welder_state_dic = {0: "free_empty", 1:"welding_middle", 2:"welded_middle", 3:"welding_left", 4:"welded_left", 5:"welding_right", 6:"welded_right"}
+        self.welder_inner_oper_time = 0
+        self.operator_welder = torch.tensor([0.2], device='cuda:0')
+        self.welder_task_dic = {0: "reset", 1:"weld_left", 2:"weld_right", 3:"weld_middle",}
+        self.welder_state_dic = {0: "free_empty", 1: "moving_left", 2:"welding_left", 3:"welded_left", 4:"moving_right",
+                                 5:"welding_right", 6:"welded_right", 7:"moving_middle", 8:"welding_middle" , 9:"welded_middle"}
         
         self.welder_inner_task = 0
         self.welder_inner_state = 0
@@ -343,27 +363,31 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # self.welder_inner_oper_time = 10
         self.operator_station = torch.tensor([0.1, 0.1, 0.1, 0.1], device='cuda:0')
         self.station_task_left_dic = {0: "reset", 1:"weld"}
-        self.station_state_left_dic = {0: "reset_empty", 1:"loaded", 2:"rotating", 3:"waiting", 4:"finished", -1:"resetting"}
+        self.station_state_left_dic = {0: "reset_empty", 1:"loading", 2:"rotating", 3:"waiting", 4:"welding", 5:"finished", -1:"resetting"}
         self.station_task_inner_left = 0
         self.station_task_outer_left = 0
-        self.station_state_inner_left = 0
-        self.station_state_outer_left = 0
+        self.station_state_inner_left = -1
+        self.station_state_outer_left = -1
 
         self.station_middle_task_dic = {0: "reset", 1:"weld_left", 2:"weld_middle", 3:"weld_right"}
-        self.station_state_middle_dic = {-1:"resetting", 0: "reset_empty", 1:"placed", 2:"welding_left", 3:"welding_right", 4:"welding_up", 6:"finished"}
+        self.station_state_middle_dic = {-1:"resetting", 0: "reset_empty", 1:"placing", 2:"placed", 3:"moving_left", 4:"welding_left", 
+                                         5:"welded_left", 6:"welding_right", 7:"welded_right", 8:"welding_upper", 9:"welded_upper"}
         self.station_state_inner_middle = 0
         self.station_state_outer_middle = 0
         self.station_task_inner_middle = 0
         self.station_task_outer_middle = 0
         
         self.station_right_task_dic = {0: "reset", 1:"weld"}
-        self.station_state_right_dic = {0: "reset_empty", 1:"placed", 2:"moving", 3:"waiting", 4:"finished", -1:"resetting"}
+        self.station_state_right_dic = {0: "reset_empty", 1:"placing", 2:"placed", 3:"moving", 4:"welding_right", 5:"finished", -1:"resetting"}
         self.station_state_inner_right = 0
         self.station_state_outer_right = 0
         self.station_task_outer_right = 0
         self.station_task_inner_right = 0
         
         self.process_groups = {}
+        self.process_groups_inner_station = {}
+        self.process_groups_outer_station = {}
+
         # prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part9/manipulator2/robotiq_arg2f_base_link")
         # prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part11/node/Station0")
         # matrix = get_world_transform_matrix(prim)
@@ -379,20 +403,25 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # scene.add(self.frankas._fingertip_centered)
         return
     
-    def add_next_group_to_be_processed(self, cube_index : int):
+    def add_next_group_to_be_processed(self):
+        cube_index = self.materials.find_next_raw_cube_index()
+        self.materials.cube_states[cube_index] = 1
         upper_tube_index = self.materials.find_next_raw_upper_tube_index()
         self.materials.upper_tube_states[upper_tube_index] = 1
         hoop_index = self.materials.find_next_raw_hoop_index()
         self.materials.hoop_states[hoop_index] = 1
         bending_tube_index = self.materials.find_next_raw_bending_tube_index()
         self.materials.bending_tube_states[bending_tube_index] = 1
-        #todo
+        #todo find a way to better choose weld station 
         station_inner_available = self.station_state_inner_middle <=0 and self.station_state_inner_left<=0 and self.station_state_inner_right<=0
         # station_outer_available = self.station_state_outer_middle <=0 and self.station_state_outer_left<=0 and self.station_state_outer_right<=0
-        weld_station = 'inner' if station_inner_available else 'outer'
-        self.process_groups[cube_index] = {'upper_tube_index':upper_tube_index,  'hoop_index':hoop_index, 'bending_tube_index':bending_tube_index, 
-                                           'weld_station': weld_station}
-        return 
+        _dict = {'cube_index':cube_index, 'upper_tube_index':upper_tube_index,  'hoop_index':hoop_index, 'bending_tube_index':bending_tube_index}
+        self.process_groups[cube_index] = _dict
+        if station_inner_available:
+            self.process_groups_inner_station[cube_index] = _dict
+        else:
+            self.process_groups_outer_station[cube_index] = _dict
+        return cube_index, upper_tube_index, hoop_index, bending_tube_index
 
     def initialize_views(self, scene) -> None:
         """Initialize views for extension workflow."""
