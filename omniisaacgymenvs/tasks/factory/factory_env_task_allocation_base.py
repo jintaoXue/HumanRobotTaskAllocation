@@ -90,6 +90,7 @@ class Materials(object):
         self.cube_convey_index = -1
         self.cube_cut_index = -1
         self.pick_up_place_cube_index = -1
+        self.pick_up_place_upper_tube_index = -1
         #for inner station
         self.inner_hoop_processing_index = -1
         self.inner_cube_processing_index = -1
@@ -238,8 +239,11 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.obj_part_7 = ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/part7", name="obj_part_7", reset_xform_properties=False
         )
+        self.obj_part_7_manipulator = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/part7/manipulator2/robotiq_arg2f_base_link", name="obj_part_7_manipulator", reset_xform_properties=False
+        )
         self.obj_part_9_manipulator = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/part9/manipulator2/robotiq_arg2f_base_link", name="obj_part_9_manipulator_", reset_xform_properties=False
+            prim_paths_expr="/World/envs/.*/obj/part9/manipulator2/robotiq_arg2f_base_link", name="obj_part_9_manipulator", reset_xform_properties=False
         )
         self.obj_11_station_0 =  ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/part11/node/Station0", name="obj_11_station_0", reset_xform_properties=False
@@ -334,15 +338,14 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # self.max_speed_grip = 0.1
         speed = 0.3
         self.operator_gripper = torch.tensor([speed]*10, device='cuda:0')
-        self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_to_inner_station", 3:"place_cut_to_outer_station", 
-                                       4:"pick_upper_tube", 5:"place_upper_tube_to_inner", 5:"place_upper_tube_to_outer"}
+        self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_to_inner_station", 3:"place_cut_to_outer_station"}
         self.gripper_inner_task = 0
         self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"placing"}
         self.gripper_inner_state = 0
 
-        self.gripper_outer_task_dic = {0: "reset", 1:"move_inner", 2:"down", 3:"grip", 4:"lifting"}
+        self.gripper_outer_task_dic = {0: "reset", 1:"pick_upper_tube", 2:"place_upper_tube_to_inner_station", 3:"place_upper_tube_to_outer_station"}
         self.gripper_outer_task = 0
-        self.gripper_outer_state_dic = {0: "empty", 1:"picked"}
+        self.gripper_outer_state_dic = {0: "free_empty", 1:"picking", 2:"placing"}
         self.gripper_outer_state = 0
 
         #welder 
@@ -351,7 +354,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.operator_welder = torch.tensor([0.2], device='cuda:0')
         self.welder_task_dic = {0: "reset", 1:"weld_left", 2:"weld_right", 3:"weld_middle",}
         self.welder_state_dic = {0: "free_empty", 1: "moving_left", 2:"welding_left", 3:"welded_left", 4:"moving_right",
-                                 5:"welding_right", 6:"welded_right", 7:"moving_middle", 8:"welding_middle" , 9:"welded_middle"}
+                                 5:"welding_right", 6:"rotate_and_welding", 7:"welded_right", 8:"welding_middle" , 9:"welded_middle"}
         
         self.welder_inner_task = 0
         self.welder_inner_state = 0
@@ -363,7 +366,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # self.welder_inner_oper_time = 10
         self.operator_station = torch.tensor([0.1, 0.1, 0.1, 0.1], device='cuda:0')
         self.station_task_left_dic = {0: "reset", 1:"weld"}
-        self.station_state_left_dic = {0: "reset_empty", 1:"loading", 2:"rotating", 3:"waiting", 4:"welding", 5:"finished", -1:"resetting"}
+        self.station_state_left_dic = {0: "reset_empty", 1:"loading", 2:"rotating", 3:"waiting", 4:"welding", 5:"welded", 6:"finished", -1:"resetting"}
         self.station_task_inner_left = 0
         self.station_task_outer_left = 0
         self.station_state_inner_left = -1
@@ -378,7 +381,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.station_task_outer_middle = 0
         
         self.station_right_task_dic = {0: "reset", 1:"weld"}
-        self.station_state_right_dic = {0: "reset_empty", 1:"placing", 2:"placed", 3:"moving", 4:"welding_right", 5:"finished", -1:"resetting"}
+        self.station_state_right_dic = {0: "reset_empty", 1:"placing", 2:"placed", 3:"moving", 4:"welding_right", 5:"rotate_tube_and_welding", 6:"finished", -1:"resetting"}
         self.station_state_inner_right = 0
         self.station_state_outer_right = 0
         self.station_task_outer_right = 0
