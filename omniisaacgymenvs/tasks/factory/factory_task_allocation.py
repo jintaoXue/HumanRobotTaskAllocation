@@ -52,6 +52,10 @@ from omniisaacgymenvs.tasks.factory.factory_schema_config_task import (
 
 from omni.isaac.core.prims import RigidPrimView
 from omni.physx.scripts import utils
+from pxr import Gf, Sdf, Usd, UsdPhysics, UsdGeom, PhysxSchema
+from omni.usd import get_world_transform_matrix
+import numpy as np
+MAX_FLOAT = 3.40282347e38
 # import numpy as np
 class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
     def __init__(self, name, sim_config, env, offset=None) -> None:
@@ -534,7 +538,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             self.materials.cube_states[pick_up_place_cube_index] = 5
             if self.gripper_inner_task == 2:
                 #place_cut_to_inner_station
-                target_pose = torch.tensor([[-2.5, 0, -1.3, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
+                target_pose = torch.tensor([[-2.4, 0, -1.25, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
                 if move_done:
                     self.gripper_inner_state = 0
@@ -557,12 +561,11 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             ref_pose = self.obj_part_9_manipulator.get_world_poses()
             # ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device='cuda:0')
             self.materials.cube_list[pick_up_place_cube_index].set_world_poses(
-                positions=ref_pose[0]+torch.tensor([[-0.5,   1.3,   -1.6]], device='cuda:0'), orientations=ref_pose[1])
+                positions=ref_pose[0]+torch.tensor([[-0.65,   1.3,   -1.6]], device='cuda:0'), orientations=ref_pose[1])
             self.materials.cube_list[pick_up_place_cube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
             # self.materials.cube_list[pick_up_place_cube_index].set_world_poses(
             #     positions=ref_pose[0]+torch.tensor([[-1,   0,   0]], device='cuda:0'), 
             #     orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
-            a = 1
         # elif self.gripper_inner_state == 3:
         #     #gripper picked material
         #     a = 1
@@ -581,7 +584,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.gripper_outer_state = 1
                 self.gripper_outer_task = 1
                 #moving to pick  
-                target_pose = torch.tensor([[0.36, 0, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                target_pose = torch.tensor([[5, 0, -1, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_outer_state = 2
@@ -594,8 +597,8 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         elif self.gripper_outer_state == 1:
             #gripper is picking
             if self.gripper_outer_task == 1:
-                #picking cut cube
-                target_pose = torch.tensor([[0.36, 0, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                #picking upper cube
+                target_pose = torch.tensor([[5, 0, -1.5, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_outer_state = 2
@@ -603,18 +606,20 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                     self.gripper_outer_task = 2 if pick_up_upper_tube_index == self.materials.inner_upper_tube_processing_index else 3
         elif self.gripper_outer_state == 2:
             #gripper is placeing
-            ref_pose = self.obj_part_7_manipulator.get_world_poses()
+            position, orientation = self.obj_part_7_manipulator.get_world_poses()
             if self.gripper_outer_task == 2:
                 #place upper tube to_inner_station
-                target_pose = torch.tensor([[-2.5, 0, -1.3, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
+                target_pose = torch.tensor([[6.85, 0, -0.3, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], target_pose[0], 'place')
                 if move_done:
                     if self.station_state_inner_middle == 7:
                         self.station_state_inner_middle = 8 #welding_middle
                     elif self.station_state_inner_middle == 9: #welded_middle
                         self.gripper_outer_state = 0
+                # orientation = torch.tensor([[ 1.0000e+00,  9.0108e-17, -1.9728e-17,  1.0443e-17]], device='cuda:0')
+                orientation = torch.tensor([[ 7.0711e-01, -6.5715e-12,  1.3597e-12,  7.0711e-01]], device='cuda:0')
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(
-                positions=ref_pose[0]+torch.tensor([[-0.5,   1.3,   -1.6]], device='cuda:0'), orientations=ref_pose[1])
+                    positions=position+torch.tensor([[0,   0,   -2]], device='cuda:0'), orientations=orientation)
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
             elif self.gripper_outer_task == 3:
                 #place_cut_to_outer_station
@@ -802,13 +807,19 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.station_state_inner_left = 0
             # inner_revolution_target = 1.5
         # ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device='cuda:0')
-        if self.station_state_inner_left in range(1,6) and inner_hoop_index >= 0:
+        if self.station_state_inner_left in range(1,5) and inner_hoop_index >= 0:
             hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_world_poses()
+            matrix = Gf.Matrix4d()
+            orientation = hoop_world_pose_orientation.cpu()[0]
+            matrix.SetRotateOnly(Gf.Quatd(float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])))
+            translate = Gf.Vec4d(0,0,0.6,0)*matrix
+            translate_tensor = torch.tensor(translate[:3], device='cuda:0')
             self.materials.hoop_list[self.materials.inner_hoop_processing_index].set_world_poses(
-                positions=hoop_world_pose_position, orientations=hoop_world_pose_orientation)
+                positions=hoop_world_pose_position+translate_tensor, orientations=hoop_world_pose_orientation)
             self.materials.hoop_list[self.materials.inner_hoop_processing_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
         if self.station_state_inner_left in range(2,6):
             inner_revolution_target = 0.0
+       
         return inner_revolution_target
             
     def put_hoop_on_weld_station_inner(self, raw_hoop_index) -> bool:
@@ -817,8 +828,8 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
     
     def post_weld_station_inner_cube_step(self, dof_inner_middle_A, dof_inner_middle_B):
         THRESHOLD = 0.05
-        welding_left_pose_A = -0.5 
-        welding_left_pose_B = -0.5 
+        welding_left_pose_A = 0.0 
+        welding_left_pose_B = 0.0 
         # inner_cube_index = self.materials.inner_cube_processing_index
         target_inner_middle_A = 0.0
         target_inner_middle_B = 0.0
@@ -862,6 +873,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             #change the bending tube pose 
         elif self.station_state_inner_middle == 8: #welding_upper
             "welding upper waiting for the welder finish"
+            self.welder_inner_task = 3
         elif self.station_state_inner_middle == 9:
             "finished welding and do the materials merge waiting for the inner gripper to pick up the product"
         if self.station_state_inner_middle in range(3,8):
@@ -869,9 +881,12 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         if self.station_state_inner_middle in range(2,10):
             #set cube pose
             ref_position, ref_orientation = self.obj_11_station_0_middle.get_world_poses()
+            # ref_position, ref_orientation = self.obj_11_station_0.get_world_poses()
             cube_index = self.materials.inner_cube_processing_index
             self.materials.cube_list[cube_index].set_world_poses(
-                positions=ref_position+torch.tensor([[-0.5,   0,   0.5]], device='cuda:0'), orientations=ref_orientation)
+                positions=ref_position+torch.tensor([[-2.4, -4.24,   -0.45]], device='cuda:0'), orientations=ref_orientation)
+            self.materials.cube_list[cube_index].set_world_poses(
+                positions=ref_position+torch.tensor([[-2.4, -4.24,   -0.45]], device='cuda:0'), orientations=ref_orientation)
             self.materials.cube_list[cube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
         # if self.station_state_inner_middle in range()
                 
@@ -879,7 +894,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
     
     def post_weld_station_inner_bending_tube_step(self, dof_inner_right):
         THRESHOLD = 0.05
-        welding_right_pose = -0.5
+        welding_right_pose = -2.6
         target_inner_right = 0.0 
         if self.station_state_inner_right == 0: #reset_empty
             if len(self.process_groups_inner_station.keys()) > 0:
@@ -904,14 +919,15 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             #do the resetting 
             if torch.abs(dof_inner_right[0] - target_inner_right) <= THRESHOLD:
                 self.station_state_inner_right = 0
-        if self.station_state_inner_right in range(2, 4):
-            ref_position, ref_orientation = self.obj_11_station_0_right.get_world_poses()
+        if self.station_state_inner_right in range(2, 5):
+            raw_orientation = torch.tensor([[-0.0017, -0.0032,  0.9999,  0.0163]], device='cuda:0')
+            ref_position, _ = self.obj_11_station_0_right.get_world_poses()
             raw_bending_tube_index = self.materials.inner_bending_tube_processing_index
             self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(
-                positions=ref_position+torch.tensor([[0.0,   0,   0.5]], device='cuda:0'), orientations=ref_orientation)
+                positions=ref_position+torch.tensor([[-2.5,   -3.25,   2]], device='cuda:0'), orientations = raw_orientation)
             self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
         if self.station_state_inner_right in range(3,5):
-            target_inner_right = -0.5
+            target_inner_right = welding_right_pose
         return target_inner_right
     
     def put_bending_tube_on_weld_station_inner(self, inner_bending_tube_processing_index):
@@ -944,9 +960,12 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.welder_inner_state = 3 
                 self.station_state_inner_left = 5 #welded
                 self.station_state_inner_middle = 5 #welded_left
-                cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
-                hoop_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/hoop_" + "{}".format(self.materials.inner_hoop_processing_index))
-                product_prim = utils.createJoint(self._stage, "Fixed", hoop_prim, cube_prim)
+                self.station_state_inner_right = 3 #moving right
+                # cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
+                # hoop_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/hoop_" + "{}".format(self.materials.inner_hoop_processing_index))
+                product_prim = self.create_fixed_joint(self.materials.hoop_list[self.materials.inner_hoop_processing_index], 
+                                                       self.materials.cube_list[self.materials.inner_cube_processing_index], 
+                                                       torch.tensor([[-4.9,   -2,   -3.05]], device='cuda:0'), joint_name='Hoop')
         elif self.welder_inner_state == 3: #welded_left
             target = welding_left_pose
             if self.welder_inner_task == 2:
@@ -966,23 +985,46 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.station_state_inner_middle = 7 #welded_right
                 self.station_state_inner_right = -1 #welded_right
         elif self.welder_inner_state == 6: #rotate_and_welding
-            ref_position, ref_orientation = self.materials.cube_list[self.materials.inner_cube_processing_index].get_world_poses()
-            raw_bending_tube_index = self.materials.inner_bending_tube_processing_index
-            self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(
-                positions=ref_position+torch.tensor([[0.0,   0,   0.5]], device='cuda:0'), 
-                orientations=ref_orientation+torch.tensor([[0.0,   0,   0.0, 0.0]])*self.welder_inner_oper_time)
-            self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
             target = welding_right_pose
             self.welder_inner_oper_time += 1
+            # ref_position, ref_orientation = self.materials.cube_list[self.materials.inner_cube_processing_index].get_world_poses()
+            # raw_bending_tube_index = self.materials.inner_bending_tube_processing_index
+            #initial pose bending tube (tensor([[-23.4063,   3.5746,   2.6908]], device='cuda:0'), tensor([[-0.0154, -0.0033,  0.9999,  0.0044]], device='cuda:0'))
+            # https://www.cnblogs.com/meteoric_cry/p/7987548.html
+            # _, prev_orientation =  self.materials.bending_tube_list[raw_bending_tube_index].get_world_poses()
+            # initial_orientation = torch.tensor([[-0.0154, -0.0033,  0.9999,  0.0044]], device='cuda:0')
+            # next_orientation_tensor = self.welder_inner_oper_time*(ref_orientation - initial_orientation)/10 + initial_orientation
+            # prev_matrix = Gf.Matrix4d()
+            # prev_matrix.SetRotateOnly(Gf.Quatd(float(prev_orientation[0][0]), float(prev_orientation[0][1]), float(prev_orientation[0][2]), float(prev_orientation[0][3])))
+            # rot_theta =  9.0*self.welder_inner_oper_time
+            # rot_matrix =  Gf.Matrix4d(0.0, 0.0, 1, 0.0,
+            #     0,  np.cos(rot_theta), np.sin(rot_theta), 0.0,
+            #     0, -np.sin(rot_theta), np.cos(rot_theta), 0.0,
+            #     0,0,0, 1.0)
+            # next_rot_matrix = prev_matrix*rot_matrix
+            # next_orientation_quat = next_rot_matrix.ExtractRotationQuat()
+            # real, imaginary = next_orientation_quat.GetReal(), next_orientation_quat.GetImaginary()
+            # next_orientation_tensor = torch.tensor([[real, imaginary[0], imaginary[1], imaginary[2]]])
+            # self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(
+            # positions=ref_position+torch.tensor([[ 1.3123, -1.0179, -2.4780]], device='cuda:0'), orientations=next_orientation_tensor)
+            # self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(torch.tensor([[-23.4193,   4.5691,   1.4]], device='cuda:0') ,
+            #                                                                           orientations=torch.tensor([[ 0.0051,  0.0026, -0.7029,  0.7113]], device='cuda:0'))
+            # self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
             if self.welder_inner_oper_time > 10:
                 #task finished
                 self.welder_inner_oper_time = 0
                 self.welder_inner_state = 7 
                 self.station_state_inner_middle = 7 #welded_right
                 self.station_state_inner_right = -1 #welded_right
-                cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
-                bending_tube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/bending_tube_" + "{}".format(self.materials.inner_bending_tube_processing_index))
-                product_prim = utils.createJoint(self._stage, "Fixed", bending_tube_prim, cube_prim)
+                # cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
+                # bending_tube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/bending_tube_" + "{}".format(self.materials.inner_bending_tube_processing_index))
+                raw_bending_tube_index = self.materials.inner_bending_tube_processing_index
+                self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(torch.tensor([[-23.4193,   4.5691,   1.35]], device='cuda:0') ,
+                                                                                      orientations=torch.tensor([[ 0.0051,  0.0026, -0.7029,  0.7113]], device='cuda:0'))
+                self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+                product_prim = self.create_fixed_joint(self.materials.bending_tube_list[self.materials.inner_bending_tube_processing_index], 
+                                        self.materials.cube_list[self.materials.inner_cube_processing_index], 
+                                        torch.tensor([[0,   0,   0]], device='cuda:0'), joint_name='BendingTube')
         elif self.welder_inner_state == 7: #welded_right
             target= welding_middle_pose
             if torch.abs(welder_inner_pose[0] - target) <= THRESHOLD and self.welder_inner_task == 3:
@@ -996,25 +1038,93 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.welder_inner_state = 9
                 self.station_state_inner_middle = 9 #welded_upper
                 self.welder_inner_task =0
-                cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
-                upper_tube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/upper_tube_" + "{}".format(self.materials.inner_upper_tube_processing_index))
-                product_prim = utils.createJoint(self._stage, "Fixed", upper_tube_prim, cube_prim)
+                # cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
+                # upper_tube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/upper_tube_" + "{}".format(self.materials.inner_upper_tube_processing_index))
+                product_prim = self.create_fixed_joint(self.materials.upper_tube_list[self.materials.inner_upper_tube_processing_index], 
+                                        self.materials.cube_list[self.materials.inner_cube_processing_index], 
+                                        torch.tensor([[0,   0,   0]], device='cuda:0'), joint_name='UpperTube')
+                # product_prim = utils.createJoint(self._stage, "Fixed", upper_tube_prim, cube_prim)
         elif self.welder_inner_state == 9: #welded_upper
             #do the reset
             if torch.abs(welder_inner_pose[0] - target) <= THRESHOLD:
                 self.welder_inner_state = 0
-        if self.welder_inner_state in range(7, 9):
-            ref_position, ref_orientation = self.materials.cube_list[self.materials.inner_cube_processing_index].get_world_poses()
-            raw_bending_tube_index = self.materials.inner_bending_tube_processing_index
-            self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(
-                positions=ref_position+torch.tensor([[0.0,   0,   0.5]], device='cuda:0'), 
-                orientations=ref_orientation+torch.tensor([[0.0,   0,   0.0, 0.0]]))
-            self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+        # if self.welder_inner_state in range(7, 10):
+        #     raw_bending_tube_index = self.materials.inner_bending_tube_processing_index
+        #     self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(torch.tensor([[-23.4193,   4.5691,   1.35]], device='cuda:0') ,
+        #                                                                               orientations=torch.tensor([[ 0.0051,  0.0026, -0.7029,  0.7113]], device='cuda:0'))
+        #     self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+            # ref_position, ref_orientation = self.materials.cube_list[self.materials.inner_cube_processing_index].get_world_poses()
+            # raw_bending_tube_index = self.materials.inner_bending_tube_processing_index
+            # self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(
+            #     positions=ref_position+torch.tensor([[0.0,   0,   0.5]], device='cuda:0'), 
+            #     orientations=ref_orientation+torch.tensor([[0.0,   0,   0.0, 0.0]], device='cuda:0'))
+            # self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+        # if self.welder_inner_state in range(8, 10):
+        if self.welder_inner_state in range(8, 9):
+            pick_up_upper_tube_index = self.materials.inner_upper_tube_processing_index
+            position = torch.tensor([[-21.5430,   3.4130,   1.1422]], device='cuda:0')
+            orientation = torch.tensor([[ 7.0711e-01, -6.5715e-12,  1.3597e-12,  7.0711e-01]], device='cuda:0')
+            self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(positions=position, orientations=orientation)
+            self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
         next_pose, _ = self.get_next_pose_helper(welder_inner_pose[0], target, self.operator_welder)
         self.obj_11_welding_0.set_joint_positions(next_pose)
         self.obj_11_welding_0.set_joint_velocities(torch.zeros(1, device='cuda:0'))
         return 
     
+    def get_trans_matrix_from_pose(self, position, orientation):
+        matrix = Gf.Matrix4d()
+        matrix.SetTranslateOnly(Gf.Vec3d(float(position[0]), float(position[1]), float(position[2])))
+        matrix.SetRotateOnly(Gf.Quatd(float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])))
+        return matrix
+
+    def create_fixed_joint(self, from_prim_view: RigidPrimView, to_prim_view: RigidPrimView, translate, joint_name):
+        # utils.createJoint
+        # from_prim_view.disable_rigid_body_physics()
+        # from_prim_view.prims[0].GetAttribute('physics:collisionEnabled').Set(False)
+        from_position, from_orientation = from_prim_view.get_world_poses()
+        to_position, to_orientation = to_prim_view.get_world_poses()
+        # to_position = from_position
+        # from_position = to_position
+        # from_position += torch.tensor([[5,   0,   0]], device='cuda:0')
+        to_position += translate
+        from_matrix = self.get_trans_matrix_from_pose(from_position[0].cpu(), from_orientation[0].cpu())
+        # from_matrix.SetRotateOnly(Gf.Quatd(-0.5, Gf.Vec3d(-0.5, 0.5, 0.5)))
+        to_matrix = self.get_trans_matrix_from_pose(to_position[0].cpu(), to_orientation[0].cpu())
+        # to_matrix.SetRotateOnly(Gf.Quatd(0.0, Gf.Vec3d(0.0, -0.7071067811865475, 0.7071067811865476)))
+        # translate = Gf.Vec3d(0,0,0)*to_matrix.ExtractRotationMatrix()
+        # translate = Gf.Vec3d(-5.5, 1, -1)
+        # to_matrix.SetTranslateOnly(translate + to_matrix.ExtractTranslation())
+        rel_pose = to_matrix * from_matrix.GetInverse()
+        rel_pose = rel_pose.RemoveScaleShear()
+        # rel_pose.SetRotateOnly(Gf.Quatd(0.0, Gf.Vec3d(0.7071067811865475, 0.0, 0.7071067811865476)))
+        # _matrix.ExtractRotationQuat()
+        # _matrix = Gf.Matrix4d(0.0, 0.0, 1, 0.0,
+        #     0, -1, 0, 0.0,
+        #     1, 0, 0, 0.0,
+        #     0.8399995477320195, -1.4471829022912717, 2.065864107281353, 1.0)
+        pos1 = Gf.Vec3f(rel_pose.ExtractTranslation())
+        rot1 = Gf.Quatf(rel_pose.ExtractRotationQuat())
+
+        from_path = from_prim_view.prim_paths[0]
+        to_path = to_prim_view.prim_paths[0]
+        joint_path = to_path + '/FixedJoint' + joint_name
+        # joint_path = to_path + '/PrismaticJoint'
+
+        component = UsdPhysics.FixedJoint.Define(self._stage, joint_path)
+        # component = UsdPhysics.PrismaticJoint.Define(self._stage, joint_path)
+        # component.CreateAxisAttr("X")
+        # component.CreateLowerLimitAttr(0.0)
+        # component.CreateUpperLimitAttr(0.0)
+        component.CreateBody0Rel().SetTargets([Sdf.Path(from_path)])
+        component.CreateBody1Rel().SetTargets([Sdf.Path(to_path)])
+        component.CreateLocalPos0Attr().Set(pos1)
+        component.CreateLocalRot0Attr().Set(rot1)
+        component.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0))
+        component.CreateLocalRot1Attr().Set(Gf.Quatf(1.0))
+        component.CreateBreakForceAttr().Set(MAX_FLOAT)
+        component.CreateBreakTorqueAttr().Set(MAX_FLOAT)
+
+        return self._stage.GetPrimAtPath(joint_path)
     async def post_physics_step_async(self):
         """Step buffers. Refresh tensors. Compute observations and reward. Reset environments."""
 

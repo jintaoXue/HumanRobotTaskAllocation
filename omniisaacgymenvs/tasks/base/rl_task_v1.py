@@ -115,7 +115,9 @@ class RLTask(RLTaskInterface):
         # view welding station
         self.camera_position = [-25, 5, 15]
         self.camera_target = [-20, 5, 3]
-
+        #welding right
+        # self.camera_position = [-16, 5, 15]
+        # self.camera_target = [-24, 5, 3]
         # view_up_down 
         # self.camera_position = [-22, 10, 20]
         # self.camera_target = [-22, 0.9, 3]

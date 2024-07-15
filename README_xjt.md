@@ -49,3 +49,7 @@ Part10 激光切料区
 self.station_state_inner_left = 4结束之后怎么复原
 
 如果inner station 发出welding upper 的请求，先确认inner gripper是resetting 状态
+prim_transformation:
+https://docs.omniverse.nvidia.com/isaacsim/latest/how_to_guides/environment_setup.html?highlight=transform%2520matrix#adding-a-transform-matrix-to-a-prim
+
+#7.14 local_pose transformation to global

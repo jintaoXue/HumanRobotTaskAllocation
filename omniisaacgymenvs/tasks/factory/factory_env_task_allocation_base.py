@@ -390,7 +390,14 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.process_groups = {}
         self.process_groups_inner_station = {}
         self.process_groups_outer_station = {}
-
+        hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_local_poses()
+        # _, hoop_world_pose_orientation = self.materials.hoop_list[self.materials.inner_hoop_processing_index].get_world_poses()
+        # from pxr import Gf, UsdGeom
+        # self.inital_inner_revolution_matrix = Gf.Matrix4d()
+        # position = hoop_world_pose_position.cpu()[0]
+        # self.inital_inner_revolution_matrix.SetTranslateOnly(Gf.Vec3d(float(position[0]), float(position[1]), float(position[2])))
+        # orientation = hoop_world_pose_orientation.cpu()[0]
+        # self.inital_inner_revolution_matrix.SetRotateOnly(Gf.Quatd(float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])))
         # prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part9/manipulator2/robotiq_arg2f_base_link")
         # prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/part11/node/Station0")
         # matrix = get_world_transform_matrix(prim)
