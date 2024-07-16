@@ -883,12 +883,12 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             ref_position, ref_orientation = self.obj_11_station_0_middle.get_world_poses()
             # ref_position, ref_orientation = self.obj_11_station_0.get_world_poses()
             cube_index = self.materials.inner_cube_processing_index
-            if self.station_state_inner_middle == 9:
-                self.materials.cube_list[cube_index].set_world_poses(positions=ref_position+torch.tensor([[-2.4, -4.24,   15]], device='cuda:0'), orientations=ref_orientation)
-                a = 1
-            else:
-                self.materials.cube_list[cube_index].set_world_poses(
-                    positions=ref_position+torch.tensor([[-2.4, -4.24,   -0.45]], device='cuda:0'), orientations=ref_orientation)
+            # if self.station_state_inner_middle == 9:
+            #     self.materials.cube_list[cube_index].set_world_poses(positions=ref_position+torch.tensor([[-2.4, -4.24,   15]], device='cuda:0'), orientations=ref_orientation)
+            #     a = 1
+            # else:
+            self.materials.cube_list[cube_index].set_world_poses(
+                positions=ref_position+torch.tensor([[-2.4, -4.24,   -0.45]], device='cuda:0'), orientations=ref_orientation)
             self.materials.cube_list[cube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
         # if self.station_state_inner_middle in range()
                 
@@ -1024,9 +1024,9 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(torch.tensor([[-23.4193,   4.5691,   1.35]], device='cuda:0') ,
                                                                                       orientations=torch.tensor([[ 0.0051,  0.0026, -0.7029,  0.7113]], device='cuda:0'))
                 self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
-                # product_prim = self.create_fixed_joint(self.materials.bending_tube_list[self.materials.inner_bending_tube_processing_index], 
-                #                         self.materials.cube_list[self.materials.inner_cube_processing_index], 
-                #                         torch.tensor([[0,   0,   0]], device='cuda:0'), joint_name='BendingTube')
+                product_prim = self.create_fixed_joint(self.materials.bending_tube_list[self.materials.inner_bending_tube_processing_index], 
+                                        self.materials.cube_list[self.materials.inner_cube_processing_index], 
+                                        torch.tensor([[0,   0,   0]], device='cuda:0'), joint_name='BendingTube')
         elif self.welder_inner_state == 7: #welded_right
             target= welding_middle_pose
             if torch.abs(welder_inner_pose[0] - target) <= THRESHOLD and self.welder_inner_task == 3:
@@ -1109,10 +1109,11 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
 
         from_path = from_prim_view.prim_paths[0]
         to_path = to_prim_view.prim_paths[0]
-        joint_path = to_path + '/FixedJoint' + joint_name
-        # joint_path = to_path + '/PrismaticJoint'
 
+        joint_path = to_path + '/FixedJoint' + joint_name
         component = UsdPhysics.FixedJoint.Define(self._stage, joint_path)
+
+        # joint_path = to_path + '/PrismaticJoint'
         # component = UsdPhysics.PrismaticJoint.Define(self._stage, joint_path)
         # component.CreateAxisAttr("X")
         # component.CreateLowerLimitAttr(0.0)
