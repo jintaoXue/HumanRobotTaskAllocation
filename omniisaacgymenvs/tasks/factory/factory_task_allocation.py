@@ -807,13 +807,18 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.station_state_inner_left = 0
             # inner_revolution_target = 1.5
         # ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device='cuda:0')
-        if self.station_state_inner_left in range(1,5) and inner_hoop_index >= 0:
+        if self.station_state_inner_left in range(1,6) and inner_hoop_index >= 0:
             hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_world_poses()
             matrix = Gf.Matrix4d()
             orientation = hoop_world_pose_orientation.cpu()[0]
             matrix.SetRotateOnly(Gf.Quatd(float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])))
             translate = Gf.Vec4d(0,0,0.6,0)*matrix
             translate_tensor = torch.tensor(translate[:3], device='cuda:0')
+            self.materials.hoop_list[self.materials.inner_hoop_processing_index].set_world_poses(
+                positions=hoop_world_pose_position+translate_tensor, orientations=hoop_world_pose_orientation)
+            self.materials.hoop_list[self.materials.inner_hoop_processing_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+        elif self.station_state_inner_left == 6:
+            #set the hoop underground
             self.materials.hoop_list[self.materials.inner_hoop_processing_index].set_world_poses(
                 positions=hoop_world_pose_position+translate_tensor, orientations=hoop_world_pose_orientation)
             self.materials.hoop_list[self.materials.inner_hoop_processing_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
@@ -965,9 +970,9 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.station_state_inner_right = 3 #moving right
                 # cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
                 # hoop_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/hoop_" + "{}".format(self.materials.inner_hoop_processing_index))
-                product_prim = self.create_fixed_joint(self.materials.hoop_list[self.materials.inner_hoop_processing_index], 
-                                                       self.materials.cube_list[self.materials.inner_cube_processing_index], 
-                                                       torch.tensor([[-4.9,   -2,   -3.05]], device='cuda:0'), joint_name='Hoop')
+                # product_prim = self.create_fixed_joint(self.materials.hoop_list[self.materials.inner_hoop_processing_index], 
+                #                                        self.materials.cube_list[self.materials.inner_cube_processing_index], 
+                #                                        torch.tensor([[-4.9,   -2,   -3.05]], device='cuda:0'), joint_name='Hoop')
         elif self.welder_inner_state == 3: #welded_left
             target = welding_left_pose
             if self.welder_inner_task == 2:
@@ -1024,9 +1029,9 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(torch.tensor([[-23.4193,   4.5691,   1.35]], device='cuda:0') ,
                                                                                       orientations=torch.tensor([[ 0.0051,  0.0026, -0.7029,  0.7113]], device='cuda:0'))
                 self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
-                product_prim = self.create_fixed_joint(self.materials.bending_tube_list[self.materials.inner_bending_tube_processing_index], 
-                                        self.materials.cube_list[self.materials.inner_cube_processing_index], 
-                                        torch.tensor([[0,   0,   0]], device='cuda:0'), joint_name='BendingTube')
+                # product_prim = self.create_fixed_joint(self.materials.bending_tube_list[self.materials.inner_bending_tube_processing_index], 
+                #                         self.materials.cube_list[self.materials.inner_cube_processing_index], 
+                #                         torch.tensor([[0,   0,   0]], device='cuda:0'), joint_name='BendingTube')
         elif self.welder_inner_state == 7: #welded_right
             target= welding_middle_pose
             if torch.abs(welder_inner_pose[0] - target) <= THRESHOLD and self.welder_inner_task == 3:
@@ -1042,9 +1047,9 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.welder_inner_task =0
                 # cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
                 # upper_tube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/upper_tube_" + "{}".format(self.materials.inner_upper_tube_processing_index))
-                product_prim = self.create_fixed_joint(self.materials.upper_tube_list[self.materials.inner_upper_tube_processing_index], 
-                                        self.materials.cube_list[self.materials.inner_cube_processing_index], 
-                                        torch.tensor([[0,   0,   0]], device='cuda:0'), joint_name='UpperTube')
+                # product_prim = self.create_fixed_joint(self.materials.upper_tube_list[self.materials.inner_upper_tube_processing_index], 
+                #                         self.materials.cube_list[self.materials.inner_cube_processing_index], 
+                #                         torch.tensor([[0,   0,   0]], device='cuda:0'), joint_name='UpperTube')
                 # product_prim = utils.createJoint(self._stage, "Fixed", upper_tube_prim, cube_prim)
         elif self.welder_inner_state == 9: #welded_upper
             #do the reset
@@ -1080,7 +1085,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         return matrix
 
     def create_fixed_joint(self, from_prim_view: RigidPrimView, to_prim_view: RigidPrimView, translate, joint_name):
-        # utils.createJoint
+        utils.createJoint
         # from_prim_view.disable_rigid_body_physics()
         # from_prim_view.prims[0].GetAttribute('physics:collisionEnabled').Set(False)
         from_position, from_orientation = from_prim_view.get_world_poses()
