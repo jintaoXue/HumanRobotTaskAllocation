@@ -38,6 +38,7 @@ def import_tasks():
     from omniisaacgymenvs.tasks.crazyflie import CrazyflieTask
     from omniisaacgymenvs.tasks.factory.factory_task_nut_bolt_pick import FactoryTaskNutBoltPick
     from omniisaacgymenvs.tasks.factory.factory_task_allocation import FactoryTaskAlloc
+    from omniisaacgymenvs.tasks.factory.factory_task_allocation_MiC import FactoryTaskAllocMiC
     from omniisaacgymenvs.tasks.factory.factory_task_nut_bolt_place import FactoryTaskNutBoltPlace
     from omniisaacgymenvs.tasks.factory.factory_task_nut_bolt_screw import FactoryTaskNutBoltScrew
     from omniisaacgymenvs.tasks.franka_cabinet import FrankaCabinetTask
@@ -73,6 +74,7 @@ def import_tasks():
         "ShadowHandOpenAI_FF": ShadowHandTask,
         "ShadowHandOpenAI_LSTM": ShadowHandTask,
         "FactoryTaskAllocation": FactoryTaskAlloc,
+        "FactoryTaskAllocationMiC": FactoryTaskAllocMiC,
     }
 
     task_map_warp = {

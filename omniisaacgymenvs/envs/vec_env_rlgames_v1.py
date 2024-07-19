@@ -37,6 +37,7 @@ import signal
 from omni.isaac.kit import SimulationApp 
 import carb
 import gymnasium as gym
+# from omniisaacgymenvs.tasks.factory.factory_task_allocation_MiC import FactoryTaskAllocMiC
 
 class VecEnvBase(gym.Env):
     """This class provides a base interface for connecting RL policies with task implementations.
@@ -137,8 +138,7 @@ class VecEnvBase(gym.Env):
         )
         self._world._current_tasks = dict()
         self._world.add_task(task)
-        from omniisaacgymenvs.tasks.factory.factory_task_allocation import FactoryTaskAlloc
-        self._task : FactoryTaskAlloc = task
+        self._task = task
         self._num_envs = self._task.num_envs
 
         self.observation_space = self._task.observation_space

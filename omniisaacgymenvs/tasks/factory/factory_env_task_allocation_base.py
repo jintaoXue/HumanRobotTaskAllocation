@@ -94,6 +94,11 @@ class Materials(object):
         self.inner_cube_processing_index = -1
         self.inner_bending_tube_processing_index = -1
         self.inner_upper_tube_processing_index = -1
+        #for outer station
+        self.outer_hoop_processing_index = -1
+        self.outer_cube_processing_index = -1
+        self.outer_bending_tube_processing_index = -1
+        self.outer_upper_tube_processing_index = -1
 
     def get_world_poses(self, list):
         poses = []
@@ -248,6 +253,9 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         )
         self.obj_11_station_0_revolution = RigidPrimView(
             prim_paths_expr="/World/envs/.*/obj/part11/node/Station0/revolution", name="Station0/revolution", reset_xform_properties=False
+        )
+        self.obj_11_station_1_revolution = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/part11/node/Station1/revolution", name="Station1/revolution", reset_xform_properties=False
         )
         self.obj_11_station_0_middle = RigidPrimView(
             prim_paths_expr="/World/envs/.*/obj/part11/node/Station0/middle_left", name="Station0/middle_left", reset_xform_properties=False

@@ -31,319 +31,17 @@
 Inherits nut-bolt environment class and abstract task class (not enforced). Can be executed with
 PYTHON_PATH omniisaacgymenvs/scripts/rlgames_train.py task=FactoryTaskNutBoltPick
 """
-
-import asyncio
-
-import hydra
-import omegaconf
 import torch
-import omni.kit
-from omni.isaac.core.simulation_context import SimulationContext
-from omni.isaac.core.utils.torch.transformations import tf_combine
 from typing import Tuple
-
-import omni.isaac.core.utils.torch as torch_utils
-import omniisaacgymenvs.tasks.factory.factory_control as fc
-from omniisaacgymenvs.tasks.factory.factory_env_task_allocation_base import FactoryEnvTaskAlloc
-from omniisaacgymenvs.tasks.factory.factory_schema_class_task import FactoryABCTask
-from omniisaacgymenvs.tasks.factory.factory_schema_config_task import (
-    FactorySchemaConfigTask,
-)
-
+from omniisaacgymenvs.tasks.factory.factory_task_allocation import FactoryTaskAlloc
 from omni.isaac.core.prims import RigidPrimView
 from omni.physx.scripts import utils
 from pxr import Gf, Sdf, Usd, UsdPhysics, UsdGeom, PhysxSchema
 from omni.usd import get_world_transform_matrix
-import numpy as np
+
 MAX_FLOAT = 3.40282347e38
 # import numpy as np
-class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
-    def __init__(self, name, sim_config, env, offset=None) -> None:
-        """Initialize environment superclass. Initialize instance variables."""
-
-        super().__init__(name, sim_config, env)
-
-        self._get_task_yaml_params()
-
-    def _get_task_yaml_params(self) -> None:
-        """Initialize instance variables from YAML files."""
-
-        cs = hydra.core.config_store.ConfigStore.instance()
-        cs.store(name="factory_schema_config_task", node=FactorySchemaConfigTask)
-
-        self.cfg_task = omegaconf.OmegaConf.create(self._task_cfg)
-        self.max_episode_length = (
-            self.cfg_task.rl.max_episode_length
-        )  # required instance var for VecTask
-
-        asset_info_path = "../tasks/factory/yaml/factory_asset_info_task_allocation.yaml"  # relative to Gym's Hydra search path (cfg dir)
-        self.asset_info_nut_bolt = hydra.compose(config_name=asset_info_path)
-        self.asset_info_nut_bolt = self.asset_info_nut_bolt[""][""][""]["tasks"][
-            "factory"
-        ][
-            "yaml"
-        ]  # strip superfluous nesting
-
-        ppo_path = "train/FactoryTaskAllocationPPO.yaml"  # relative to Gym's Hydra search path (cfg dir)
-        self.cfg_ppo = hydra.compose(config_name=ppo_path)
-        self.cfg_ppo = self.cfg_ppo["train"]  # strip superfluous nesting
-
-    def post_reset(self) -> None:
-        """Reset the world. Called only once, before simulation begins."""
-
-        if self.cfg_task.sim.disable_gravity:
-            self.disable_gravity()
-
-        # self.acquire_base_tensors()
-        self._acquire_task_tensors()
-
-        # self.refresh_base_tensors()
-        # self.refresh_env_tensors()
-        # self._refresh_task_tensors()
-
-        # Reset all envs
-        # indices = torch.arange(self._num_envs, dtype=torch.int64, device=self._device)
-        # asyncio.ensure_future(
-        #     self.reset_idx_async(indices, randomize_gripper_pose=False)
-        # )
-
-    def _acquire_task_tensors(self) -> None:
-        """Acquire tensors."""
-        self.actions = torch.zeros(
-            (self.num_envs, self.num_actions), device=self.device
-        )
-
-    def pre_physics_step(self, actions) -> None:
-        """Reset environments. Apply actions from policy. Simulation step called after this method."""
-
-        if not self.world.is_playing():
-            return
-
-        env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
-        # if len(env_ids) > 0:
-            # self.reset_idx(env_ids, randomize_gripper_pose=True)
-
-        self.actions = actions.clone().to(
-            self.device
-        )  # shape = (num_envs, num_actions); values = [-1, 1]
-
-        # self._apply_actions_as_ctrl_targets(
-        #     actions=self.actions,
-        #     ctrl_target_gripper_dof_pos=self.asset_info_franka_table.franka_gripper_width_max,
-        #     do_scale=True,
-        # )
-
-    async def pre_physics_step_async(self, actions) -> None:
-        """Reset environments. Apply actions from policy. Simulation step called after this method."""
-
-        if not self.world.is_playing():
-            return
-
-        env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
-        if len(env_ids) > 0:
-            await self.reset_idx_async(env_ids, randomize_gripper_pose=True)
-
-        self.actions = actions.clone().to(
-            self.device
-        )  # shape = (num_envs, num_actions); values = [-1, 1]
-
-        self._apply_actions_as_ctrl_targets(
-            actions=self.actions,
-            ctrl_target_gripper_dof_pos=self.asset_info_franka_table.franka_gripper_width_max,
-            do_scale=True,
-        )
-
-    def reset_idx(self, env_ids, randomize_gripper_pose) -> None:
-        """Reset specified environments."""
-
-        self._reset_franka(env_ids)
-        self._reset_object(env_ids)
-
-        if randomize_gripper_pose:
-            self._randomize_gripper_pose(
-                env_ids, sim_steps=self.cfg_task.env.num_gripper_move_sim_steps
-            )
-
-        self._reset_buffers(env_ids)
-
-    async def reset_idx_async(self, env_ids, randomize_gripper_pose) -> None:
-        """Reset specified environments."""
-
-        self._reset_franka(env_ids)
-        self._reset_object(env_ids)
-
-        if randomize_gripper_pose:
-            await self._randomize_gripper_pose_async(
-                env_ids, sim_steps=self.cfg_task.env.num_gripper_move_sim_steps
-            )
-
-        self._reset_buffers(env_ids)
-
-    def _reset_franka(self, env_ids) -> None:
-        """Reset DOF states and DOF targets of Franka."""
-
-        self.dof_pos[env_ids] = torch.cat(
-            (
-                torch.tensor(
-                    self.cfg_task.randomize.franka_arm_initial_dof_pos,
-                    device=self.device,
-                ),
-                torch.tensor(
-                    [self.asset_info_franka_table.franka_gripper_width_max],
-                    device=self.device,
-                ),
-                torch.tensor(
-                    [self.asset_info_franka_table.franka_gripper_width_max],
-                    device=self.device,
-                ),
-            ),
-            dim=-1,
-        )  # shape = (num_envs, num_dofs)
-        self.dof_vel[env_ids] = 0.0  # shape = (num_envs, num_dofs)
-        self.ctrl_target_dof_pos[env_ids] = self.dof_pos[env_ids]
-
-        indices = env_ids.to(dtype=torch.int32)
-        self.frankas.set_joint_positions(self.dof_pos[env_ids], indices=indices)
-        self.frankas.set_joint_velocities(self.dof_vel[env_ids], indices=indices)
-
-    def _reset_object(self, env_ids) -> None:
-        """Reset root states of nut and bolt."""
-
-        # Randomize root state of nut
-        nut_noise_xy = 2 * (
-            torch.rand((self.num_envs, 2), dtype=torch.float32, device=self.device)
-            - 0.5
-        )  # [-1, 1]
-        nut_noise_xy = nut_noise_xy @ torch.diag(
-            torch.tensor(self.cfg_task.randomize.nut_pos_xy_noise, device=self.device)
-        )
-
-        self.nut_pos[env_ids, 0] = (
-            self.cfg_task.randomize.nut_pos_xy_initial[0] + nut_noise_xy[env_ids, 0]
-        )
-        self.nut_pos[env_ids, 1] = (
-            self.cfg_task.randomize.nut_pos_xy_initial[1] + nut_noise_xy[env_ids, 1]
-        )
-        self.nut_pos[
-            env_ids, 2
-        ] = self.cfg_base.env.table_height - self.bolt_head_heights.squeeze(-1)
-
-        self.nut_quat[env_ids, :] = torch.tensor(
-            [1.0, 0.0, 0.0, 0.0], dtype=torch.float32, device=self.device
-        ).repeat(len(env_ids), 1)
-
-        self.nut_linvel[env_ids, :] = 0.0
-        self.nut_angvel[env_ids, :] = 0.0
-
-        indices = env_ids.to(dtype=torch.int32)
-        self.nuts.set_world_poses(
-            self.nut_pos[env_ids] + self.env_pos[env_ids],
-            self.nut_quat[env_ids],
-            indices,
-        )
-        self.nuts.set_velocities(
-            torch.cat((self.nut_linvel[env_ids], self.nut_angvel[env_ids]), dim=1),
-            indices,
-        )
-
-        # Randomize root state of bolt
-        bolt_noise_xy = 2 * (
-            torch.rand((self.num_envs, 2), dtype=torch.float32, device=self.device)
-            - 0.5
-        )  # [-1, 1]
-        bolt_noise_xy = bolt_noise_xy @ torch.diag(
-            torch.tensor(self.cfg_task.randomize.bolt_pos_xy_noise, device=self.device)
-        )
-
-        self.bolt_pos[env_ids, 0] = (
-            self.cfg_task.randomize.bolt_pos_xy_initial[0] + bolt_noise_xy[env_ids, 0]
-        )
-        self.bolt_pos[env_ids, 1] = (
-            self.cfg_task.randomize.bolt_pos_xy_initial[1] + bolt_noise_xy[env_ids, 1]
-        )
-        self.bolt_pos[env_ids, 2] = self.cfg_base.env.table_height
-
-        self.bolt_quat[env_ids, :] = torch.tensor(
-            [1.0, 0.0, 0.0, 0.0], dtype=torch.float32, device=self.device
-        ).repeat(len(env_ids), 1)
-
-        indices = env_ids.to(dtype=torch.int32)
-        self.bolts.set_world_poses(
-            self.bolt_pos[env_ids] + self.env_pos[env_ids],
-            self.bolt_quat[env_ids],
-            indices,
-        )
-
-    def _reset_buffers(self, env_ids) -> None:
-        """Reset buffers."""
-
-        self.reset_buf[env_ids] = 0
-        self.progress_buf[env_ids] = 0
-
-    def _apply_actions_as_ctrl_targets(
-        self, actions, ctrl_target_gripper_dof_pos, do_scale
-    ) -> None:
-        """Apply actions from policy as position/rotation/force/torque targets."""
-
-        # Interpret actions as target pos displacements and set pos target
-        pos_actions = actions[:, 0:3]
-        if do_scale:
-            pos_actions = pos_actions @ torch.diag(
-                torch.tensor(self.cfg_task.rl.pos_action_scale, device=self.device)
-            )
-        self.ctrl_target_fingertip_midpoint_pos = (
-            self.fingertip_midpoint_pos + pos_actions
-        )
-
-        # Interpret actions as target rot (axis-angle) displacements
-        rot_actions = actions[:, 3:6]
-        if do_scale:
-            rot_actions = rot_actions @ torch.diag(
-                torch.tensor(self.cfg_task.rl.rot_action_scale, device=self.device)
-            )
-
-        # Convert to quat and set rot target
-        angle = torch.norm(rot_actions, p=2, dim=-1)
-        axis = rot_actions / angle.unsqueeze(-1)
-        rot_actions_quat = torch_utils.quat_from_angle_axis(angle, axis)
-        if self.cfg_task.rl.clamp_rot:
-            rot_actions_quat = torch.where(
-                angle.unsqueeze(-1).repeat(1, 4) > self.cfg_task.rl.clamp_rot_thresh,
-                rot_actions_quat,
-                torch.tensor([1.0, 0.0, 0.0, 0.0], device=self.device).repeat(
-                    self.num_envs, 1
-                ),
-            )
-        self.ctrl_target_fingertip_midpoint_quat = torch_utils.quat_mul(
-            rot_actions_quat, self.fingertip_midpoint_quat
-        )
-
-        if self.cfg_ctrl["do_force_ctrl"]:
-            # Interpret actions as target forces and target torques
-            force_actions = actions[:, 6:9]
-            if do_scale:
-                force_actions = force_actions @ torch.diag(
-                    torch.tensor(
-                        self.cfg_task.rl.force_action_scale, device=self.device
-                    )
-                )
-
-            torque_actions = actions[:, 9:12]
-            if do_scale:
-                torque_actions = torque_actions @ torch.diag(
-                    torch.tensor(
-                        self.cfg_task.rl.torque_action_scale, device=self.device
-                    )
-                )
-
-            self.ctrl_target_fingertip_contact_wrench = torch.cat(
-                (force_actions, torque_actions), dim=-1
-            )
-
-        self.ctrl_target_gripper_dof_pos = ctrl_target_gripper_dof_pos
-
-        self.generate_ctrl_signals()
-
+class FactoryTaskAllocMiC(FactoryTaskAlloc):
     def post_physics_step(
         self,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -760,16 +458,24 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         inner_mid_target_A, inner_mid_target_B = self.post_weld_station_inner_cube_step(weld_station_inner_pose[:, 1], weld_station_inner_pose[:, 2])
         inner_right_target = self.post_weld_station_inner_bending_tube_step(weld_station_inner_pose[:, 3])
         self.post_weld_station_inner_tube_step()
-        #outer station step
-        weld_station_outer_pose = self.obj_11_station_1.get_joint_positions()
-        
-        # self.post_weld_station_inner_upper_tube_step()
+
         target_pose = torch.tensor([[inner_revolution_target,  inner_mid_target_A,  inner_mid_target_B, inner_right_target]], device='cuda:0')
         next_pose, _ = self.get_next_pose_helper(weld_station_inner_pose, target_pose, self.operator_station)
         self.obj_11_station_0.set_joint_positions(next_pose)
         self.obj_11_station_0.set_joint_velocities(torch.zeros(4, device='cuda:0'))
-        #right station step
-        #middle station step
+
+        #outer station step
+        weld_station_outer_pose = self.obj_11_station_1.get_joint_positions()
+        outer_revolution_target = self.post_weld_station_outer_hoop_step(weld_station_outer_pose[:, 0])
+        outer_mid_target_A, outer_mid_target_B = self.post_weld_station_outer_cube_step(weld_station_outer_pose[:, 1], weld_station_outer_pose[:, 2])
+        outer_right_target = self.post_weld_station_outer_bending_tube_step(weld_station_outer_pose[:, 3])
+        self.post_weld_station_outer_tube_step()
+
+        target_pose = torch.tensor([[outer_revolution_target,  outer_mid_target_A,  outer_mid_target_B, outer_right_target]], device='cuda:0')
+        next_pose, _ = self.get_next_pose_helper(weld_station_outer_pose, target_pose, self.operator_station)
+        self.obj_11_station_1.set_joint_positions(next_pose)
+        self.obj_11_station_1.set_joint_velocities(torch.zeros(4, device='cuda:0'))
+
         return
     
     def post_weld_station_inner_hoop_step(self, dof_inner_revolution):
@@ -963,6 +669,11 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         return True
 
     def post_welder_step(self):
+        self.post_inner_welder_step()
+        self.post_outer_welder_step()
+        return 
+
+    def post_inner_welder_step(self):
         THRESHOLD = 0.05
         welding_left_pose = -3.5
         welding_middle_pose = -2
@@ -1114,12 +825,114 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         #     orientation = torch.tensor([[ 7.0711e-01, -6.5715e-12,  1.3597e-12,  7.0711e-01]], device='cuda:0')
         #     self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(positions=position, orientations=orientation)
         #     self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
-        
         next_pose, _ = self.get_next_pose_helper(welder_inner_pose[0], target, self.operator_welder)
         self.obj_11_welding_0.set_joint_positions(next_pose)
         self.obj_11_welding_0.set_joint_velocities(torch.zeros(1, device='cuda:0'))
-        return 
-    
+
+    def post_outer_welder_step(self):
+        THRESHOLD = 0.05
+        welding_left_pose = -3.5
+        welding_middle_pose = -2
+        welding_right_pose = 0
+        target = 0.0 
+        welder_outer_pose = self.obj_11_welding_0.get_joint_positions()
+        if self.welder_outer_state == 0: #free_empty
+            #waiting for the weld station prepared well 
+            if self.welder_outer_task == 1:
+                #welding left part task
+                self.welder_outer_state = 1
+        elif self.welder_outer_state == 1: #moving_left
+            #moving to the welding_left_pose
+            target = welding_left_pose
+            if torch.abs(welder_outer_pose[0] - target) <= THRESHOLD:
+                self.welder_outer_state = 2
+        elif self.welder_outer_state == 2: #welding_left
+            #start welding left
+            target = welding_left_pose
+            self.welder_outer_oper_time += 1
+            if self.welder_outer_oper_time > 10:
+                #task finished
+                self.welder_outer_oper_time = 0
+                self.welder_outer_state = 3 
+                self.station_state_outer_left = 5 #welded
+                self.station_state_outer_middle = 5 #welded_left
+                self.station_state_outer_right = 3 #moving right
+        elif self.welder_outer_state == 3: #welded_left
+            target = welding_left_pose
+            if self.welder_outer_task == 2:
+                self.welder_outer_state = 4
+        elif self.welder_outer_state == 4: #moving_right
+            #moving to the welding_right_pose
+            target = welding_right_pose
+            if torch.abs(welder_outer_pose[0] - target) <= THRESHOLD:
+                self.welder_outer_state = 5
+        elif self.welder_outer_state == 5: #welding_right
+            target = welding_right_pose
+            self.welder_outer_oper_time += 1
+            if self.welder_outer_oper_time > 10:
+                #task finished
+                self.welder_outer_oper_time = 0
+                self.welder_outer_state = 6 
+                self.station_state_outer_middle = 7 #welded_right
+                self.station_state_outer_right = -1 #welded_right
+        elif self.welder_outer_state == 6: #rotate_and_welding
+            target = welding_right_pose
+            self.welder_outer_oper_time += 1
+            if self.welder_outer_oper_time > 10:
+                #task finished
+                self.welder_outer_oper_time = 0
+                self.welder_outer_state = 7 
+                self.station_state_outer_middle = 7 #welded_right
+                self.station_state_outer_right = -1 #welded_right
+        elif self.welder_outer_state == 7: #welded_right
+            target= welding_middle_pose
+            if torch.abs(welder_outer_pose[0] - target) <= THRESHOLD and self.welder_outer_task == 3:
+                self.welder_outer_state = 8
+        elif self.welder_outer_state == 8: #welding_upper
+            pick_up_upper_tube_index = self.materials.outer_upper_tube_processing_index
+            target = welding_middle_pose
+            self.welder_outer_oper_time += 1
+            if self.welder_outer_oper_time > 10:
+                #task finished
+                self.welder_outer_oper_time = 0
+                self.welder_outer_state = 9
+                self.station_state_outer_middle = 9 #welded_upper
+                self.station_state_outer_left = -1
+                self.welder_outer_task =0
+                self.gripper_outer_task = 4
+                self.gripper_outer_state = 1
+                '''set the upper tube under the ground'''
+                position = torch.tensor([[0,   0,   -100]], device='cuda:0')
+                self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(positions=position)
+                self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+            else:
+                position = torch.tensor([[-21.5430,   3.4130,   1.1422]], device='cuda:0')
+                orientation = torch.tensor([[ 7.0711e-01, -6.5715e-12,  1.3597e-12,  7.0711e-01]], device='cuda:0')
+                self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(positions=position, orientations=orientation)
+                self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+        elif self.welder_outer_state == 9: #welded_upper
+            #do the reset
+            if torch.abs(welder_outer_pose[0] - target) <= THRESHOLD:
+                self.welder_outer_state = 0
+            #set bending tube to underground
+            bending_tube_index = self.materials.outer_bending_tube_processing_index
+            self.materials.bending_tube_list[bending_tube_index].set_world_poses(torch.tensor([[0,   0,   -100]], device='cuda:0'))
+            self.materials.bending_tube_list[bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+            #set upper tube to under ground
+            upper_tube_index = self.materials.outer_upper_tube_processing_index
+            self.materials.upper_tube_list[upper_tube_index].set_world_poses(torch.tensor([[0,   0,   -100]], device='cuda:0'))
+            self.materials.upper_tube_list[upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+            self.materials.outer_bending_tube_processing_index = -1
+            self.materials.outer_upper_tube_processing_index = -1   
+        if self.welder_outer_state in range(6, 9):
+            bending_tube_index = self.materials.outer_bending_tube_processing_index
+            self.materials.bending_tube_list[bending_tube_index].set_world_poses(torch.tensor([[-23.4193,   4.5691,   1.35]], device='cuda:0') ,
+                                                                                      orientations=torch.tensor([[ 0.0051,  0.0026, -0.7029,  0.7113]], device='cuda:0'))
+            self.materials.bending_tube_list[bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+        next_pose, _ = self.get_next_pose_helper(welder_outer_pose[0], target, self.operator_welder)
+        self.obj_11_welding_1.set_joint_positions(next_pose)
+        self.obj_11_welding_1.set_joint_velocities(torch.zeros(1, device='cuda:0'))
+
     def get_trans_matrix_from_pose(self, position, orientation):
         matrix = Gf.Matrix4d()
         matrix.SetTranslateOnly(Gf.Vec3d(float(position[0]), float(position[1]), float(position[2])))
@@ -1175,410 +988,193 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
         component.CreateBreakTorqueAttr().Set(MAX_FLOAT)
 
         return self._stage.GetPrimAtPath(joint_path)
-    async def post_physics_step_async(self):
-        """Step buffers. Refresh tensors. Compute observations and reward. Reset environments."""
-
-        self.progress_buf[:] += 1
-
-        if self.world.is_playing():
-            # In this policy, episode length is constant
-            is_last_step = self.progress_buf[0] == self.max_episode_length - 1
-
-            if self.cfg_task.env.close_and_lift:
-                # At this point, robot has executed RL policy. Now close gripper and lift (open-loop)
-                if is_last_step:
-                    await self._close_gripper_async(
-                        sim_steps=self.cfg_task.env.num_gripper_close_sim_steps
-                    )
-                    await self._lift_gripper_async(
-                        sim_steps=self.cfg_task.env.num_gripper_lift_sim_steps
-                    )
-
-            self.refresh_base_tensors()
-            self.refresh_env_tensors()
-            self._refresh_task_tensors()
-            self.get_observations()
-            self.get_states()
-            self.calculate_metrics()
-            self.get_extras()
-
-        return self.obs_buf, self.rew_buf, self.reset_buf, self.extras
-
-    def _refresh_task_tensors(self):
-        """Refresh tensors."""
-
-        # Compute pose of nut grasping frame
-        self.nut_grasp_quat, self.nut_grasp_pos = tf_combine(
-            self.nut_quat,
-            self.nut_pos,
-            self.nut_grasp_quat_local,
-            self.nut_grasp_pos_local,
-        )
-
-        # Compute pos of keypoints on gripper and nut in world frame
-        for idx, keypoint_offset in enumerate(self.keypoint_offsets):
-            self.keypoints_gripper[:, idx] = tf_combine(
-                self.fingertip_midpoint_quat,
-                self.fingertip_midpoint_pos,
-                self.identity_quat,
-                keypoint_offset.repeat(self.num_envs, 1),
-            )[1]
-            self.keypoints_nut[:, idx] = tf_combine(
-                self.nut_grasp_quat,
-                self.nut_grasp_pos,
-                self.identity_quat,
-                keypoint_offset.repeat(self.num_envs, 1),
-            )[1]
-
-    def get_observations(self) -> dict:
-        """Compute observations."""
-
-        # Shallow copies of tensors
-        obs_tensors = [
-            self.fingertip_midpoint_pos,
-            self.fingertip_midpoint_quat,
-            self.fingertip_midpoint_linvel,
-            self.fingertip_midpoint_angvel,
-            self.nut_grasp_pos,
-            self.nut_grasp_quat,
-        ]
-
-        self.obs_buf = torch.cat(
-            obs_tensors, dim=-1
-        )  # shape = (num_envs, num_observations)
-
-        observations = {self.frankas.name: {"obs_buf": self.obs_buf}}
-
-        return observations
-
-    def calculate_metrics(self) -> None:
-        """Update reward and reset buffers."""
-
-        self._update_reset_buf()
-        self._update_rew_buf()
-
-    def _update_reset_buf(self) -> None:
-        """Assign environments for reset if successful or failed."""
-
-        # If max episode length has been reached
-        self.reset_buf[:] = torch.where(
-            self.progress_buf[:] >= self.max_episode_length - 1,
-            torch.ones_like(self.reset_buf),
-            self.reset_buf,
-        )
-
-    def _update_rew_buf(self) -> None:
-        """Compute reward at current timestep."""
-
-        keypoint_reward = -self._get_keypoint_dist()
-        action_penalty = (
-            torch.norm(self.actions, p=2, dim=-1)
-            * self.cfg_task.rl.action_penalty_scale
-        )
-
-        self.rew_buf[:] = (
-            keypoint_reward * self.cfg_task.rl.keypoint_reward_scale
-            - action_penalty * self.cfg_task.rl.action_penalty_scale
-        )
-
-        # In this policy, episode length is constant across all envs
-        is_last_step = self.progress_buf[0] == self.max_episode_length - 1
-
-        if is_last_step:
-            # Check if nut is picked up and above table
-            lift_success = self._check_lift_success(height_multiple=3.0)
-            self.rew_buf[:] += lift_success * self.cfg_task.rl.success_bonus
-            self.extras["successes"] = torch.mean(lift_success.float())
-
-    def _get_keypoint_offsets(self, num_keypoints) -> torch.Tensor:
-        """Get uniformly-spaced keypoints along a line of unit length, centered at 0."""
-
-        keypoint_offsets = torch.zeros((num_keypoints, 3), device=self.device)
-        keypoint_offsets[:, -1] = (
-            torch.linspace(0.0, 1.0, num_keypoints, device=self.device) - 0.5
-        )
-
-        return keypoint_offsets
-
-    def _get_keypoint_dist(self) -> torch.Tensor:
-        """Get keypoint distance."""
-
-        keypoint_dist = torch.sum(
-            torch.norm(self.keypoints_nut - self.keypoints_gripper, p=2, dim=-1), dim=-1
-        )
-
-        return keypoint_dist
-
-    def _close_gripper(self, sim_steps=20) -> None:
-        """Fully close gripper using controller. Called outside RL loop (i.e., after last step of episode)."""
-
-        self._move_gripper_to_dof_pos(gripper_dof_pos=0.0, sim_steps=sim_steps)
-
-    def _move_gripper_to_dof_pos(self, gripper_dof_pos, sim_steps=20) -> None:
-        """Move gripper fingers to specified DOF position using controller."""
-
-        delta_hand_pose = torch.zeros(
-            (self.num_envs, 6), device=self.device
-        )  # No hand motion
-        self._apply_actions_as_ctrl_targets(
-            delta_hand_pose, gripper_dof_pos, do_scale=False
-        )
-
-        # Step sim
-        for _ in range(sim_steps):
-            SimulationContext.step(self.world, render=True)
-
-    def _lift_gripper(
-        self, franka_gripper_width=0.0, lift_distance=0.3, sim_steps=20
-    ) -> None:
-        """Lift gripper by specified distance. Called outside RL loop (i.e., after last step of episode)."""
-
-        delta_hand_pose = torch.zeros([self.num_envs, 6], device=self.device)
-        delta_hand_pose[:, 2] = lift_distance
-
-        # Step sim
-        for _ in range(sim_steps):
-            self._apply_actions_as_ctrl_targets(
-                delta_hand_pose, franka_gripper_width, do_scale=False
-            )
-            SimulationContext.step(self.world, render=True)
-
-    async def _close_gripper_async(self, sim_steps=20) -> None:
-        """Fully close gripper using controller. Called outside RL loop (i.e., after last step of episode)."""
-        await self._move_gripper_to_dof_pos_async(
-            gripper_dof_pos=0.0, sim_steps=sim_steps
-        )
-
-    async def _move_gripper_to_dof_pos_async(
-        self, gripper_dof_pos, sim_steps=20
-    ) -> None:
-        """Move gripper fingers to specified DOF position using controller."""
-
-        delta_hand_pose = torch.zeros(
-            (self.num_envs, self.cfg_task.env.numActions), device=self.device
-        )  # No hand motion
-        self._apply_actions_as_ctrl_targets(
-            delta_hand_pose, gripper_dof_pos, do_scale=False
-        )
-
-        # Step sim
-        for _ in range(sim_steps):
-            self.world.physics_sim_view.flush()
-            await omni.kit.app.get_app().next_update_async()
-
-    async def _lift_gripper_async(
-        self, franka_gripper_width=0.0, lift_distance=0.3, sim_steps=20
-    ) -> None:
-        """Lift gripper by specified distance. Called outside RL loop (i.e., after last step of episode)."""
-
-        delta_hand_pose = torch.zeros([self.num_envs, 6], device=self.device)
-        delta_hand_pose[:, 2] = lift_distance
-
-        # Step sim
-        for _ in range(sim_steps):
-            self._apply_actions_as_ctrl_targets(
-                delta_hand_pose, franka_gripper_width, do_scale=False
-            )
-            self.world.physics_sim_view.flush()
-            await omni.kit.app.get_app().next_update_async()
-
-    def _check_lift_success(self, height_multiple) -> torch.Tensor:
-        """Check if nut is above table by more than specified multiple times height of nut."""
-
-        lift_success = torch.where(
-            self.nut_pos[:, 2]
-            > self.cfg_base.env.table_height
-            + self.nut_heights.squeeze(-1) * height_multiple,
-            torch.ones((self.num_envs,), device=self.device),
-            torch.zeros((self.num_envs,), device=self.device),
-        )
-
-        return lift_success
-
-    def _randomize_gripper_pose(self, env_ids, sim_steps) -> None:
-        """Move gripper to random pose."""
-
-        # step once to update physx with the newly set joint positions from reset_franka()
-        SimulationContext.step(self.world, render=True)
-
-        # Set target pos above table
-        self.ctrl_target_fingertip_midpoint_pos = torch.tensor(
-            [0.0, 0.0, self.cfg_base.env.table_height], device=self.device
-        ) + torch.tensor(
-            self.cfg_task.randomize.fingertip_midpoint_pos_initial, device=self.device
-        )
-        self.ctrl_target_fingertip_midpoint_pos = (
-            self.ctrl_target_fingertip_midpoint_pos.unsqueeze(0).repeat(
-                self.num_envs, 1
-            )
-        )
-
-        fingertip_midpoint_pos_noise = 2 * (
-            torch.rand((self.num_envs, 3), dtype=torch.float32, device=self.device)
-            - 0.5
-        )  # [-1, 1]
-        fingertip_midpoint_pos_noise = fingertip_midpoint_pos_noise @ torch.diag(
-            torch.tensor(
-                self.cfg_task.randomize.fingertip_midpoint_pos_noise, device=self.device
-            )
-        )
-        self.ctrl_target_fingertip_midpoint_pos += fingertip_midpoint_pos_noise
-
-        # Set target rot
-        ctrl_target_fingertip_midpoint_euler = (
-            torch.tensor(
-                self.cfg_task.randomize.fingertip_midpoint_rot_initial,
-                device=self.device,
-            )
-            .unsqueeze(0)
-            .repeat(self.num_envs, 1)
-        )
-
-        fingertip_midpoint_rot_noise = 2 * (
-            torch.rand((self.num_envs, 3), dtype=torch.float32, device=self.device)
-            - 0.5
-        )  # [-1, 1]
-        fingertip_midpoint_rot_noise = fingertip_midpoint_rot_noise @ torch.diag(
-            torch.tensor(
-                self.cfg_task.randomize.fingertip_midpoint_rot_noise, device=self.device
-            )
-        )
-        ctrl_target_fingertip_midpoint_euler += fingertip_midpoint_rot_noise
-        self.ctrl_target_fingertip_midpoint_quat = torch_utils.quat_from_euler_xyz(
-            ctrl_target_fingertip_midpoint_euler[:, 0],
-            ctrl_target_fingertip_midpoint_euler[:, 1],
-            ctrl_target_fingertip_midpoint_euler[:, 2],
-        )
-
-        # Step sim and render
-        for _ in range(sim_steps):
-            if not self.world.is_playing():
-                return
-
-            self.refresh_base_tensors()
-            self.refresh_env_tensors()
-            self._refresh_task_tensors()
-
-            pos_error, axis_angle_error = fc.get_pose_error(
-                fingertip_midpoint_pos=self.fingertip_midpoint_pos,
-                fingertip_midpoint_quat=self.fingertip_midpoint_quat,
-                ctrl_target_fingertip_midpoint_pos=self.ctrl_target_fingertip_midpoint_pos,
-                ctrl_target_fingertip_midpoint_quat=self.ctrl_target_fingertip_midpoint_quat,
-                jacobian_type=self.cfg_ctrl["jacobian_type"],
-                rot_error_type="axis_angle",
-            )
-
-            delta_hand_pose = torch.cat((pos_error, axis_angle_error), dim=-1)
-            actions = torch.zeros(
-                (self.num_envs, self.cfg_task.env.numActions), device=self.device
-            )
-            actions[:, :6] = delta_hand_pose
-
-            self._apply_actions_as_ctrl_targets(
-                actions=actions,
-                ctrl_target_gripper_dof_pos=self.asset_info_franka_table.franka_gripper_width_max,
-                do_scale=False,
-            )
-
-            SimulationContext.step(self.world, render=True)
-
-        self.dof_vel[env_ids, :] = torch.zeros_like(self.dof_vel[env_ids])
-
-        indices = env_ids.to(dtype=torch.int32)
-        self.frankas.set_joint_velocities(self.dof_vel[env_ids], indices=indices)
-
-        # step once to update physx with the newly set joint velocities
-        SimulationContext.step(self.world, render=True)
-
-    async def _randomize_gripper_pose_async(self, env_ids, sim_steps) -> None:
-        """Move gripper to random pose."""
-
-        # step once to update physx with the newly set joint positions from reset_franka()
-        await omni.kit.app.get_app().next_update_async()
-
-        # Set target pos above table
-        self.ctrl_target_fingertip_midpoint_pos = torch.tensor(
-            [0.0, 0.0, self.cfg_base.env.table_height], device=self.device
-        ) + torch.tensor(
-            self.cfg_task.randomize.fingertip_midpoint_pos_initial, device=self.device
-        )
-        self.ctrl_target_fingertip_midpoint_pos = (
-            self.ctrl_target_fingertip_midpoint_pos.unsqueeze(0).repeat(
-                self.num_envs, 1
-            )
-        )
-
-        fingertip_midpoint_pos_noise = 2 * (
-            torch.rand((self.num_envs, 3), dtype=torch.float32, device=self.device)
-            - 0.5
-        )  # [-1, 1]
-        fingertip_midpoint_pos_noise = fingertip_midpoint_pos_noise @ torch.diag(
-            torch.tensor(
-                self.cfg_task.randomize.fingertip_midpoint_pos_noise, device=self.device
-            )
-        )
-        self.ctrl_target_fingertip_midpoint_pos += fingertip_midpoint_pos_noise
-
-        # Set target rot
-        ctrl_target_fingertip_midpoint_euler = (
-            torch.tensor(
-                self.cfg_task.randomize.fingertip_midpoint_rot_initial,
-                device=self.device,
-            )
-            .unsqueeze(0)
-            .repeat(self.num_envs, 1)
-        )
-        fingertip_midpoint_rot_noise = 2 * (
-            torch.rand((self.num_envs, 3), dtype=torch.float32, device=self.device)
-            - 0.5
-        )  # [-1, 1]
-        fingertip_midpoint_rot_noise = fingertip_midpoint_rot_noise @ torch.diag(
-            torch.tensor(
-                self.cfg_task.randomize.fingertip_midpoint_rot_noise, device=self.device
-            )
-        )
-        ctrl_target_fingertip_midpoint_euler += fingertip_midpoint_rot_noise
-        self.ctrl_target_fingertip_midpoint_quat = torch_utils.quat_from_euler_xyz(
-            ctrl_target_fingertip_midpoint_euler[:, 0],
-            ctrl_target_fingertip_midpoint_euler[:, 1],
-            ctrl_target_fingertip_midpoint_euler[:, 2],
-        )
-
-        # Step sim and render
-        for _ in range(sim_steps):
-            self.refresh_base_tensors()
-            self.refresh_env_tensors()
-            self._refresh_task_tensors()
-
-            pos_error, axis_angle_error = fc.get_pose_error(
-                fingertip_midpoint_pos=self.fingertip_midpoint_pos,
-                fingertip_midpoint_quat=self.fingertip_midpoint_quat,
-                ctrl_target_fingertip_midpoint_pos=self.ctrl_target_fingertip_midpoint_pos,
-                ctrl_target_fingertip_midpoint_quat=self.ctrl_target_fingertip_midpoint_quat,
-                jacobian_type=self.cfg_ctrl["jacobian_type"],
-                rot_error_type="axis_angle",
-            )
-
-            delta_hand_pose = torch.cat((pos_error, axis_angle_error), dim=-1)
-            actions = torch.zeros(
-                (self.num_envs, self.cfg_task.env.numActions), device=self.device
-            )
-            actions[:, :6] = delta_hand_pose
-
-            self._apply_actions_as_ctrl_targets(
-                actions=actions,
-                ctrl_target_gripper_dof_pos=self.asset_info_franka_table.franka_gripper_width_max,
-                do_scale=False,
-            )
-
-            self.world.physics_sim_view.flush()
-            await omni.kit.app.get_app().next_update_async()
-
-        self.dof_vel[env_ids, :] = torch.zeros_like(self.dof_vel[env_ids])
-
-        indices = env_ids.to(dtype=torch.int32)
-        self.frankas.set_joint_velocities(self.dof_vel[env_ids], indices=indices)
-
-        # step once to update physx with the newly set joint velocities
-        self.world.physics_sim_view.flush()
-        await omni.kit.app.get_app().next_update_async()
+    
+    def post_weld_station_outer_hoop_step(self, dof_outer_revolution):
+        THRESHOLD = 0.1
+        reset_revolution_pose = 1.5
+        outer_revolution_target = 1.5
+        outer_hoop_index = self.materials.outer_hoop_processing_index
+        # hoop_world_pose_position, hoop_world_pose_orientation = self.materials_hoop_0.get_world_poses()
+        if self.station_state_outer_left == 0: #reset_empty
+            #station is free now, find existing process group task
+            # outer_revolution_target = 1.5
+            if len(self.proc_groups_outer_list) > 0:
+                raw_cube_index = self.proc_groups_outer_list[0]
+                raw_hoop_index = self.process_groups_dict[raw_cube_index]["hoop_index"]
+                if self.materials.hoop_states[raw_hoop_index] == 0:
+                    self.station_state_outer_left = 1
+                    self.materials.outer_hoop_processing_index = raw_hoop_index
+                    self.materials.hoop_states[raw_hoop_index] = 1
+        elif self.station_state_outer_left == 1: #loading
+            # outer_revolution_target = 1.5
+            if self.put_hoop_on_weld_station_outer(self.materials.outer_hoop_processing_index):
+                self.station_state_outer_left = 2
+                self.materials.hoop_states[self.materials.outer_hoop_processing_index] = 1
+        elif self.station_state_outer_left == 2: #rotating
+            #the station start to rotating 
+            outer_revolution_target = 0.0
+            delta_pose = torch.abs(dof_outer_revolution[0] - outer_revolution_target)
+            if delta_pose < THRESHOLD:
+                self.station_state_outer_left = 3
+        elif self.station_state_outer_left == 3: #waiting
+            #waiting for the station middle is prepared well (and the cube is already placed on the middle station)
+            if self.welder_outer_task == 1:
+                #the welder task is to weld the left part
+                self.station_state_outer_left = 4
+        elif self.station_state_outer_left == 4:
+            "welding the left part"
+        elif self.station_state_outer_left == 5:
+            "welded the left part"
+        elif self.station_state_outer_left == -1:
+            # the station is resetting
+            delta_pose = torch.abs(dof_outer_revolution[0] - reset_revolution_pose)
+            if delta_pose < THRESHOLD:
+                self.station_state_outer_left = 0
+            # outer_revolution_target = 1.5
+        # ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device='cuda:0')
+        if self.station_state_outer_left in range(1,6) and outer_hoop_index >= 0:
+            hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_1_revolution.get_world_poses()
+            matrix = Gf.Matrix4d()
+            orientation = hoop_world_pose_orientation.cpu()[0]
+            matrix.SetRotateOnly(Gf.Quatd(float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])))
+            translate = Gf.Vec4d(0,0,0.6,0)*matrix
+            translate_tensor = torch.tensor(translate[:3], device='cuda:0')
+            self.materials.hoop_list[self.materials.outer_hoop_processing_index].set_world_poses(
+                positions=hoop_world_pose_position+translate_tensor, orientations=hoop_world_pose_orientation)
+            self.materials.hoop_list[self.materials.outer_hoop_processing_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+        elif self.station_state_outer_left == 6:
+            #set the hoop underground
+            self.materials.hoop_list[self.materials.outer_hoop_processing_index].set_world_poses(positions=torch.tensor([[0,0,-100]], device='cuda:0'))
+            self.materials.hoop_list[self.materials.outer_hoop_processing_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+            self.materials.outer_hoop_processing_index = -1
+        if self.station_state_outer_left in range(2,6):
+            outer_revolution_target = 0.0
+       
+        return outer_revolution_target
+            
+    def put_hoop_on_weld_station_outer(self, raw_hoop_index) -> bool:
+        #todo 
+        return True
+    
+    def post_weld_station_outer_cube_step(self, dof_outer_middle_A, dof_outer_middle_B):
+        THRESHOLD = 0.05
+        welding_left_pose_A = 0.0 
+        welding_left_pose_B = 0.0 
+        target_outer_middle_A = 0.0 #default is reseted state
+        target_outer_middle_B = 0.0
+        if self.station_state_outer_middle in range(3,8):
+            target_outer_middle_A, target_outer_middle_B = welding_left_pose_A, welding_left_pose_B
+        if self.station_state_outer_middle == 0:
+            if len(self.proc_groups_outer_list) > 0:
+                raw_cube_index = self.proc_groups_outer_list[0]
+                if self.materials.cube_states[raw_cube_index] in range(0, 5): #0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_place_cut",
+                    self.station_state_outer_middle = 1
+                    self.materials.outer_cube_processing_index = raw_cube_index
+        elif self.station_state_outer_middle == 1:
+            "#waiting for the gripper to place the cut cube on station outer middle"
+        elif self.station_state_outer_middle == 2: #placed
+            #waiting for the station outer left loaded hoop
+            if self.station_state_outer_left == 3: #waiting
+                self.station_state_outer_middle = 3
+        elif self.station_state_outer_middle == 3: #moving left
+            #moving left to start welding left part
+            # target_outer_middle_A, target_outer_middle_B = welding_left_pose_A, welding_left_pose_B
+            if torch.abs(dof_outer_middle_A[0] - welding_left_pose_A) <= THRESHOLD:
+                self.station_state_outer_middle = 4
+                self.welder_outer_task = 1
+                # self.station_state_outer_left = 4
+        elif self.station_state_outer_middle == 4: #welding left
+            #moved left and wating for the welder finished
+            # target_outer_middle_A, target_outer_middle_B = welding_left_pose_A, welding_left_pose_B
+            a = 1
+        elif self.station_state_outer_middle == 5: #welded_left
+            #finished welding left and waiting for the starion right is prepared well
+            # target_outer_middle_A, target_outer_middle_B = welding_left_pose_A, welding_left_pose_B
+            if self.station_state_outer_right == 4: #welding_right
+                #start welding right
+                self.station_state_outer_middle = 6 
+                self.welder_outer_task = 2
+        elif self.station_state_outer_middle == 6: #welding_right
+            #welding right waiting for the welder finish
+            a = 1
+        elif self.station_state_outer_middle == 7: #welded_right
+            "post_outer_gripper_step to place the upper tube on cube"
+            #change the bending tube pose 
+        elif self.station_state_outer_middle == 8: #welding_upper
+            "welding upper waiting for the welder finish"
+            self.welder_outer_task = 3
+        elif self.station_state_outer_middle == 9: #welded_upper
+            "finished welding and do the materials merge waiting for the outer gripper to pick up the product"
+            
+            #set cube to underground 
+            self.materials.cube_list[self.materials.outer_cube_processing_index].set_world_poses(positions=torch.tensor([[0,0,-100]], device='cuda:0'))
+            self.materials.cube_list[self.materials.outer_cube_processing_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+            #set product position
+            position, orientation= (torch.tensor([[-12.3281,  -2.8855,  -0.1742]], device='cuda:0'), torch.tensor([[ 9.9978e-01, -6.1045e-04, -2.0787e-02, -4.5162e-05]], device='cuda:0'))
+            self.materials.product_list[self.materials.outer_cube_processing_index].set_world_poses(positions=position, orientations=orientation)
+        elif self.station_state_outer_middle == -1: #resetting middle part
+            if torch.abs(dof_outer_middle_A[0] - target_outer_middle_A) <= THRESHOLD:
+                self.station_state_outer_middle = 0
+        if self.station_state_outer_middle in range(2,9):
+            #set cube pose
+            ref_position, ref_orientation = self.obj_11_station_0_middle.get_world_poses()
+            cube_index = self.materials.outer_cube_processing_index
+            self.materials.cube_list[cube_index].set_world_poses(positions=ref_position+torch.tensor([[-2.4, -4.24,   -0.45]], device='cuda:0'), orientations=ref_orientation)
+            self.materials.cube_list[cube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+
+        return target_outer_middle_A, target_outer_middle_B
+    
+    def post_weld_station_outer_bending_tube_step(self, dof_outer_right):
+        THRESHOLD = 0.05
+        welding_right_pose = -2.6
+        target_outer_right = 0.0 
+        if self.station_state_outer_right == 0: #reset_empty
+            if len(self.proc_groups_outer_list) > 0:
+                raw_cube_index = self.proc_groups_outer_list[0]
+                raw_bending_tube_index = self.process_groups_dict[raw_cube_index]["bending_tube_index"]
+                if self.materials.bending_tube_states[raw_bending_tube_index] == 0: #0:"wait"
+                    self.station_state_outer_right = 1
+                    self.materials.outer_bending_tube_processing_index = raw_bending_tube_index      
+                    self.materials.bending_tube_states[raw_bending_tube_index] = 1    
+        elif self.station_state_outer_right == 1: #placing
+            #place bending tube on the station right 
+            if self.put_bending_tube_on_weld_station_outer(self.materials.outer_bending_tube_processing_index):
+                self.station_state_outer_right = 2
+                self.materials.bending_tube_states[self.materials.outer_bending_tube_processing_index] = 2
+        elif self.station_state_outer_right == 2: #placed
+            "waiting for the middle part and welding left task finished"
+        elif self.station_state_outer_right == 3: #moving
+            #moving
+            if torch.abs(dof_outer_right[0] - welding_right_pose) <= THRESHOLD:
+                self.station_state_outer_right = 4
+                # self.station_state_outer_left = 4
+        elif self.station_state_outer_right == 4: #welding_right_step_1
+            "wating for the welding right task finished"
+        elif self.station_state_outer_right == -1:
+            #do the resetting 
+            if torch.abs(dof_outer_right[0] - target_outer_right) <= THRESHOLD:
+                self.station_state_outer_right = 0
+        if self.station_state_outer_right in range(2, 5):
+            raw_orientation = torch.tensor([[-0.0017, -0.0032,  0.9999,  0.0163]], device='cuda:0')
+            ref_position, _ = self.obj_11_station_0_right.get_world_poses()
+            raw_bending_tube_index = self.materials.outer_bending_tube_processing_index
+            self.materials.bending_tube_list[raw_bending_tube_index].set_world_poses(
+                positions=ref_position+torch.tensor([[-2.5,   -3.25,   2]], device='cuda:0'), orientations = raw_orientation)
+            self.materials.bending_tube_list[raw_bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+        if self.station_state_outer_right in range(3,5):
+            target_outer_right = welding_right_pose
+        return target_outer_right
+    
+    def put_bending_tube_on_weld_station_outer(self, outer_bending_tube_processing_index):
+        return True
+    
+    def post_weld_station_outer_tube_step(self):
+        if len(self.proc_groups_outer_list) > 0:
+            raw_cube_index = self.proc_groups_outer_list[0]
+            upper_tube_index = self.process_groups_dict[raw_cube_index]['upper_tube_index']
+            if self.materials.upper_tube_states[upper_tube_index] == 0: #0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_place_cut",
+                self.materials.upper_tube_states[upper_tube_index] = 1
+                self.materials.outer_upper_tube_processing_index = upper_tube_index
+
+    def put_upper_tube_on_station(self, outer_upper_tube_processing_index):
+        return True
