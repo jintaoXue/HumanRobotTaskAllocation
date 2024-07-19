@@ -61,34 +61,32 @@ from omni.isaac.core.articulations import ArticulationView
 from omni.usd import get_world_transform_matrix, get_local_transform_matrix
 
 class Materials(object):
-    def __init__(self, cube_list : list, hoop_list : list, bending_tube_list : list, upper_tube_list: list) -> None:
+    def __init__(self, cube_list : list, hoop_list : list, bending_tube_list : list, upper_tube_list: list, product_list : list) -> None:
 
         self.cube_list = cube_list
         self.upper_tube_list = upper_tube_list
         self.hoop_list = hoop_list
         self.bending_tube_list = bending_tube_list
+        self.product_list = product_list
 
         self.cube_state_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_place_cut", 
                                    6:"placed_station_inner", 7:"placed_station_outer", 7:"welding_left", 8:"welding_right", 9:"welding_upper",
                                    10:"process_done", 11:"pick_up_place_product"}
-        self.hoop_state_dic = {-1:"done", 0:"wait", 1:"loading", 2:"loaded", 3:"" }
+        self.hoop_state_dic = {-1:"done", 0:"wait", 1:"loading", 2:"loaded"}
         self.bending_tube_state_dic = {}
         self.upper_tube_state_dic = {}
+        self.product_state_dic = {0:"waitng", 1:"placed", -1:"finished"}
 
         self.cube_states = [0]*len(self.cube_list)
         self.hoop_states = [0]*len(self.hoop_list)
         self.bending_tube_states = [0]*len(self.bending_tube_list)
         self.upper_tube_states = [0]*len(self.upper_tube_list)
-
-        # self.cube_poses = self.get_world_poses(self.cube_list)
-        # self.hoop_poses = self.get_world_poses(self.hoop_list)
-        # self.bending_tube_poses = self.get_world_poses(self.bending_tube_list)
-
-        # self.raw_cube_index = -1
-        # self.process_groups = {}
-
+        self.product_states = [0]*len(self.product_list)
+        #conveyor
         self.cube_convey_index = -1
+        #cutting machine
         self.cube_cut_index = -1
+        #grippers
         self.pick_up_place_cube_index = -1
         self.pick_up_place_upper_tube_index = -1
         #for inner station
@@ -107,7 +105,7 @@ class Materials(object):
         pass
 
     def done(self):
-        return max(self.cube_states) == -1
+        return max(self.product_states) == -1
 
     def find_next_raw_cube_index(self):
         # index 
@@ -292,7 +290,11 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
             name="upper_tube_0",
             track_contact_forces=True,
         )
-
+        self.product_0 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/product_0",
+            name="product_0",
+            track_contact_forces=True,
+        )
         scene.add(self.obj_11_station_0)
         scene.add(self.obj_11_station_1)
         scene.add(self.obj_11_welding_0)
@@ -314,9 +316,10 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         scene.add(self.materials_hoop_0)
         scene.add(self.materials_bending_tube_0)
         scene.add(self.materials_upper_tube_0)
+        scene.add(self.product_0)
         #materials states
         self.materials : Materials = Materials(cube_list=[self.materials_cube_0], hoop_list=[self.materials_hoop_0], 
-                                               bending_tube_list=[self.materials_bending_tube_0], upper_tube_list=[self.materials_upper_tube_0])
+                bending_tube_list=[self.materials_bending_tube_0], upper_tube_list=[self.materials_upper_tube_0], product_list = [self.product_0])
         # self.materials_flag_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_cut", 
         # 5:"down", 6:"combine_l", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
         # conveyor
@@ -338,7 +341,8 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # self.max_speed_grip = 0.1
         speed = 0.3
         self.operator_gripper = torch.tensor([speed]*10, device='cuda:0')
-        self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_to_inner_station", 3:"place_cut_to_outer_station"}
+        self.gripper_inner_task_dic = {0: "reset", 1:"pick_cut", 2:"place_cut_to_inner_station", 3:"place_cut_to_outer_station", 
+                                    4:"pick_product_from_inner", 5:"pick_product_from_outer", 6:"place_product_from_inner", 7:"place_product_from_outer"}
         self.gripper_inner_task = 0
         self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"placing"}
         self.gripper_inner_state = 0
@@ -354,7 +358,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.operator_welder = torch.tensor([0.2], device='cuda:0')
         self.welder_task_dic = {0: "reset", 1:"weld_left", 2:"weld_right", 3:"weld_middle",}
         self.welder_state_dic = {0: "free_empty", 1: "moving_left", 2:"welding_left", 3:"welded_left", 4:"moving_right",
-                                 5:"welding_right", 6:"rotate_and_welding", 7:"welded_right", 8:"welding_middle" , 9:"welded_middle"}
+                                 5:"welding_right", 6:"rotate_and_welding", 7:"welded_right", 8:"welding_middle" , 9:"welded_upper"}
         
         self.welder_inner_task = 0
         self.welder_inner_state = 0
@@ -387,10 +391,15 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.station_task_outer_right = 0
         self.station_task_inner_right = 0
         
-        self.process_groups = {}
-        self.process_groups_inner_station = {}
-        self.process_groups_outer_station = {}
+        self.process_groups_dict = {}
+        self.proc_groups_inner_list = []
+        self.proc_groups_outer_list = []
         hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_local_poses()
+
+
+        # self.upper_tube_stationt_state_dic = {0:"is_not_full", 1:"fulled"}
+        # self.station_state_tube_inner = 0
+
         # _, hoop_world_pose_orientation = self.materials.hoop_list[self.materials.inner_hoop_processing_index].get_world_poses()
         # from pxr import Gf, UsdGeom
         # self.inital_inner_revolution_matrix = Gf.Matrix4d()
@@ -417,20 +426,19 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         cube_index = self.materials.find_next_raw_cube_index()
         self.materials.cube_states[cube_index] = 1
         upper_tube_index = self.materials.find_next_raw_upper_tube_index()
-        self.materials.upper_tube_states[upper_tube_index] = 1
         hoop_index = self.materials.find_next_raw_hoop_index()
-        self.materials.hoop_states[hoop_index] = 1
         bending_tube_index = self.materials.find_next_raw_bending_tube_index()
-        self.materials.bending_tube_states[bending_tube_index] = 1
         #todo find a way to better choose weld station 
         station_inner_available = self.station_state_inner_middle <=0 and self.station_state_inner_left<=0 and self.station_state_inner_right<=0
         # station_outer_available = self.station_state_outer_middle <=0 and self.station_state_outer_left<=0 and self.station_state_outer_right<=0
         _dict = {'cube_index':cube_index, 'upper_tube_index':upper_tube_index,  'hoop_index':hoop_index, 'bending_tube_index':bending_tube_index}
-        self.process_groups[cube_index] = _dict
         if station_inner_available:
-            self.process_groups_inner_station[cube_index] = _dict
+            _dict['station'] = 'inner'
+            self.proc_groups_inner_list.append(cube_index)
         else:
-            self.process_groups_outer_station[cube_index] = _dict
+            self.proc_groups_outer_list.append(cube_index)
+            _dict['station'] = 'outer'
+        self.process_groups_dict[cube_index] = _dict
         return cube_index, upper_tube_index, hoop_index, bending_tube_index
 
     def initialize_views(self, scene) -> None:
