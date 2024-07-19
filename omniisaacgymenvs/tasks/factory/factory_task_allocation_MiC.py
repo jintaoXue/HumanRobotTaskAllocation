@@ -186,14 +186,18 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         translate_tensor = torch.tensor([[-0.65,   1.3,   -1.6]], device='cuda:0') #default as cube
         if self.gripper_inner_state == 0:
             #gripper is free and empty todo
-            stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle
-            if (pick_up_place_cube_index>=0) and not stations_are_full:
-                # making sure station is available before start picking
+            stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle #only state == 0 means 
+            if (pick_up_place_cube_index>=0) and not stations_are_full: #pick cut cube by cutting machine
+                # making sure station is available before start picking, moving to cutting machine
+                if self.station_state_inner_middle == 0:
+
                 self.gripper_inner_task = 1
-                self.gripper_inner_state = 1    
-                #moving inner 
+                self.gripper_inner_state = 1
                 target_pose = torch.tensor([[0.36, 0, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
+                if self.station_state_inner_middle == 0:
+                    #moving inner 
+
                 if move_done: 
                     self.gripper_inner_state = 2
                     #choose which station to place on the cube
