@@ -186,54 +186,48 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         translate_tensor = torch.tensor([[-0.65,   1.3,   -1.6]], device='cuda:0') #default as cube
         if self.gripper_inner_state == 0:
             #gripper is free and empty todo
-            stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle #only state == 0 means 
+            stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle #only state == 0 means free, -1 and >= 0 means full
             if (pick_up_place_cube_index>=0) and not stations_are_full: #pick cut cube by cutting machine
                 # making sure station is available before start picking, moving to cutting machine
-                if self.station_state_inner_middle == 0:
-
-                self.gripper_inner_task = 1
-                self.gripper_inner_state = 1
-                target_pose = torch.tensor([[0.36, 0, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
-                next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
-                if self.station_state_inner_middle == 0:
-                    #moving inner 
-
-                if move_done: 
-                    self.gripper_inner_state = 2
-                    #choose which station to place on the cube
-                    self.gripper_inner_task = 2 if self.process_groups_dict[pick_up_place_cube_index]['station'] == 'inner' else 3
-                    # self.materials.cube_states[pick_up_place_cube_index] = 5
-                # dof_pos_7_inner = inner_initial_pose + delta_pos
+                if self.station_state_inner_middle == 0 or  (self.station_state_outer_middle == 0 and self.gripper_outer_state == 0): #inner weld station is free, start picking
+                    self.gripper_inner_task = 1
+                    self.gripper_inner_state = 1
             else:
                 #no task to do, reset
                 self.gripper_inner_task = 0
-                next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], inner_initial_pose[0], 'reset')
+            next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], inner_initial_pose[0], 'reset')
         elif self.gripper_inner_state == 1:
             #gripper is picking
-            if self.gripper_inner_task == 1:
-                #picking cut cube
+            if self.gripper_inner_task == 1: #picking cut cube
                 target_pose = torch.tensor([[0.36, 0, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
+                    #choose which station to place on the cube
                     self.gripper_inner_state = 2
-                    #check available laser station(always true, making sure station is available before start picking)
-                    self.gripper_inner_task = 2 if self.process_groups_dict[pick_up_place_cube_index]['station'] == 'inner' else 3
+                    if self.station_state_inner_middle == 1 and self.process_groups_dict[pick_up_place_cube_index]['station'] == 'inner':
+                        self.gripper_inner_task = 2 #place on inner station
+                    elif (self.station_state_outer_middle == 1 and self.gripper_outer_state == 0) and self.process_groups_dict[pick_up_place_cube_index]['station'] == 'outer':
+                        self.gripper_inner_task = 3 #place on outer station
             elif self.gripper_inner_task == 4: #pick_product_from_inner
                 target_pose = torch.tensor([[-2.55, -1, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_inner_state = 2
                     #check available laser station(always true, making sure station is available before start picking)
-                    self.gripper_inner_task = 6 #place_product
+                    self.gripper_inner_task = 6 #place_product from inner
                     self.station_state_inner_middle = -1
-            elif self.gripper_inner_task == 5:#
-
-        elif self.gripper_inner_state == 2:
+            elif self.gripper_inner_task == 5: #pick_product_from_outer
+                target_pose = torch.tensor([[-2.55-3.44, -1, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
+                if move_done: 
+                    self.gripper_inner_state = 2
+                    #check available laser station(always true, making sure station is available before start picking)
+                    self.gripper_inner_task = 7 #place_product from outer
+                    self.station_state_outer_middle = -1
+        elif self.gripper_inner_state == 2: #gripper is placeing
             placing_material = None
-            #gripper is placeing
             self.materials.cube_states[pick_up_place_cube_index] = 5
-            if self.gripper_inner_task == 2:
-                #place_cut_to_inner_station
+            if self.gripper_inner_task == 2: #place_cut_to_inner_station
                 placing_material = self.materials.cube_list[pick_up_place_cube_index]
                 target_pose = torch.tensor([[-2.4, 0, -1.25, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
@@ -242,9 +236,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.materials.cube_states[pick_up_place_cube_index] = 6
                     self.station_state_inner_middle = 2
                     self.materials.pick_up_place_cube_index = -1
-            elif self.gripper_inner_task == 3:
-                #place_cut_to_outer_station
-                #todo checking collision with outer gripper
+            elif self.gripper_inner_task == 3: #place_cut_to_outer_station
                 placing_material = self.materials.cube_list[pick_up_place_cube_index]
                 target_pose = torch.tensor([[-2.5 - 3.34, 0, -1.3, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
@@ -254,7 +246,6 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.station_state_outer_middle = 2
                     self.materials.pick_up_place_cube_index = -1
             elif self.gripper_inner_task == 6: #place_product_from_inner
-                #todo check collision with outer gripper 
                 placing_material = self.materials.product_list[self.materials.inner_cube_processing_index]
                 orientations = torch.tensor([[ 9.9921e-01, -8.5482e-04, -3.9828e-02, -5.8904e-04]], device='cuda:0')
                 translate_tensor = torch.tensor([[10.1983,   -6.4176,   -2.4110]], device='cuda:0')
@@ -266,7 +257,18 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.materials.product_states[self.materials.inner_cube_processing_index] = 1 # product is placed
                     self.proc_groups_inner_list.pop(0)
                     self.materials.inner_cube_processing_index = -1
-
+            elif self.gripper_inner_task == 7: #place_product_from_outer
+                placing_material = self.materials.product_list[self.materials.outer_cube_processing_index]
+                orientations = torch.tensor([[ 9.9921e-01, -8.5482e-04, -3.9828e-02, -5.8904e-04]], device='cuda:0')
+                translate_tensor = torch.tensor([[10.1983,   -6.4176,   -2.4110]], device='cuda:0')
+                target_pose = torch.tensor([[-9.7, -1, -1, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
+                next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
+                if move_done:
+                    "a product is produced and placed on the robot, then do resetting"
+                    self.gripper_inner_state = 0
+                    self.materials.product_states[self.materials.inner_cube_processing_index] = 1 # product is placed
+                    self.proc_groups_outer_list.pop(0)
+                    self.materials.outer_cube_processing_index = -1
             # ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device='cuda:0')
             placing_material.set_world_poses(positions=positions+translate_tensor, orientations=orientations)
             placing_material.set_velocities(torch.zeros((1,6), device='cuda:0'))
@@ -288,33 +290,38 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if self.station_state_inner_middle == 7 and self.gripper_inner_state == 0: #welded_right
                 # check inner gripper reset and wont collide with outer gripper
                 self.materials.pick_up_place_upper_tube_index = self.materials.inner_upper_tube_processing_index
-                self.gripper_outer_state = 1
-                self.gripper_outer_task = 1
-                #moving to pick  
-                target_pose = torch.tensor([[6.45, 0, -1.5, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
-                next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], target_pose[0], 'pick')
-                if move_done: 
-                    self.gripper_outer_state = 2
-                    #choose inner station to place on the cube
-                    self.gripper_outer_task = 2
+                self.gripper_outer_state = 1 #Picking
+                self.gripper_outer_task = 1 #pick_upper_tube for inner station
+            elif self.station_state_outer_middle == 7:
+                self.materials.pick_up_place_upper_tube_index = self.materials.outer_upper_tube_processing_index
+                self.gripper_outer_state = 1 #Picking
+                self.gripper_outer_task = 2 #pick_upper_tube for inner station
             else:
                 #no task to do, reset
                 self.gripper_outer_task = 0
-                next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], outer_initial_pose[0], 'reset')
+            next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], outer_initial_pose[0], 'reset')
         elif self.gripper_outer_state == 1:
             #gripper is picking
             if self.gripper_outer_task == 1:
-                #picking upper cube
+                #picking upper cube for inner station
                 target_pose = torch.tensor([[6.45, 0, -1.5, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], target_pose[0], 'pick')
                 if move_done: 
                     self.gripper_outer_state = 2
                     #check available laser station(always true, making sure station is available before start picking)
-                    self.gripper_outer_task = 2 if pick_up_upper_tube_index == self.materials.inner_upper_tube_processing_index else 3
+                    self.gripper_outer_task = 3
+            if self.gripper_outer_task == 2:
+                #picking upper cube for outer station
+                target_pose = torch.tensor([[6.45, 0, -1.5, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], target_pose[0], 'pick')
+                if move_done: 
+                    self.gripper_outer_state = 2
+                    #check available laser station(always true, making sure station is available before start picking)
+                    self.gripper_outer_task = 4
         elif self.gripper_outer_state == 2:
             #gripper is placeing
             position, orientation = self.obj_part_7_manipulator.get_world_poses()
-            if self.gripper_outer_task == 2:
+            if self.gripper_outer_task == 3:
                 #place upper tube to_inner_station
                 target_pose = torch.tensor([[8.3, 0, -0.25, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], target_pose[0], 'place')
@@ -329,17 +336,21 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(
                     positions=position+torch.tensor([[0,   0,   -2]], device='cuda:0'), orientations=orientation)
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
-            elif self.gripper_outer_task == 3:
+            elif self.gripper_outer_task == 4:
                 #place upper tube to outer station
-                target_pose = torch.tensor([[-2.5 - 3.34, 0, -1.3, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
+                target_pose = torch.tensor([[3, 0, -0.25, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], target_pose[0], 'place')
                 if move_done:
-                    self.gripper_outer_state = 0
-                    self.station_state_outer_middle = 8
-            else:
-                #other placing task
-                a = 1
-            
+                    if self.station_state_outer_middle == 7:
+                        self.station_state_outer_middle = 8 #welding_middle
+                    elif self.station_state_outer_middle == 9: #welded_middle 
+                        #if done reset the outer gripper
+                        self.gripper_outer_state = 0
+                # orientation = torch.tensor([[ 1.0000e+00,  9.0108e-17, -1.9728e-17,  1.0443e-17]], device='cuda:0')
+                orientation = torch.tensor([[ 7.0711e-01, -6.5715e-12,  1.3597e-12,  7.0711e-01]], device='cuda:0')
+                self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(
+                    positions=position+torch.tensor([[0,   0,   -2]], device='cuda:0'), orientations=orientation)
+                self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
         return next_pos_outer
 
     def merge_two_grippers_pose(self, pose, pose_inner, pose_outer):

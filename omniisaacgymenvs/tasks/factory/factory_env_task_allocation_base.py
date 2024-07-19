@@ -358,7 +358,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.gripper_inner_state_dic = {0: "free_empty", 1:"picking", 2:"placing"}
         self.gripper_inner_state = 0
 
-        self.gripper_outer_task_dic = {0: "reset", 1:"pick_upper_tube", 2:"place_upper_tube_to_inner_station", 3:"place_upper_tube_to_outer_station"}
+        self.gripper_outer_task_dic = {0: "reset", 1:"pick_upper_tube_for_inner_station", 2:"pick_upper_tube_for_outer_station", 3:"place_upper_tube_to_inner_station", 4:"place_upper_tube_to_outer_station"}
         self.gripper_outer_task = 0
         self.gripper_outer_state_dic = {0: "free_empty", 1:"picking", 2:"placing"}
         self.gripper_outer_state = 0
