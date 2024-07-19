@@ -263,6 +263,9 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.obj_11_station_0_right = RigidPrimView(
             prim_paths_expr="/World/envs/.*/obj/part11/node/Station0/right", name="Station0/right", reset_xform_properties=False
         )
+        self.obj_11_station_1_right = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/part11/node/Station1/right", name="Station1/right", reset_xform_properties=False
+        )
         self.obj_11_station_1 =  ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/part11/node/Station1", name="obj_11_station_1", reset_xform_properties=False
         )
