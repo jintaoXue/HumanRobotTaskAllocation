@@ -475,10 +475,11 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_local_poses()
 
         '''for humans and robots'''
-        from omniisaacgymenvs.robots.omni_anim_people.omni.anim.people.scripts.character_behavior import CharacterBehavior
-        omniisaacgymenvs/robots/omni_anim_people/omni/anim/people/scripts/character_behavior.py
-        _prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/obj/Characters/male_adult_construction_05_new")
-        CharacterBehavior(_prim)
+        # from omniisaacgymenvs.robots.omni_anim_people.omni.anim.people.scripts.character_behavior import CharacterBehavior
+        # from omni import kit
+        # omniisaacgymenvs/robots/omni_anim_people/omni/anim/people/scripts/character_behavior.py
+        # _prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/obj/Characters/male_adult_construction_05_new")
+        # CharacterBehavior(_prim)
         # self.upper_tube_stationt_state_dic = {0:"is_not_full", 1:"fulled"}
         # self.station_state_tube_inner = 0
 
