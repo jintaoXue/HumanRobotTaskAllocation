@@ -69,10 +69,10 @@ class Materials(object):
         self.bending_tube_list = bending_tube_list
         self.product_list = product_list
 
-        self.cube_state_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_place_cut", 
-                                   6:"placed_station_inner", 7:"placed_station_outer", 7:"welding_left", 8:"welding_right", 9:"welding_upper",
-                                   10:"process_done", 11:"pick_up_place_product"}
-        self.hoop_state_dic = {-1:"done", 0:"wait", 1:"loading", 2:"loaded"}
+        self.cube_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"conveying", 3:"conveyed", 4:"cutting", 5:"cut_done", 6:"pick_up_place_cut", 
+                                   7:"placed_station_inner", 8:"placed_station_outer", 9:"welding_left", 10:"welding_right", 11:"welding_upper",
+                                   12:"process_done", 13:"pick_up_place_product"}
+        self.hoop_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"loading", 3:"loaded"}
         self.bending_tube_state_dic = {}
         self.upper_tube_state_dic = {}
         self.product_state_dic = {0:"waitng", 1:"placed", -1:"finished"}
@@ -260,6 +260,9 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.obj_11_station_0_middle = RigidPrimView(
             prim_paths_expr="/World/envs/.*/obj/part11/node/Station0/middle_left", name="Station0/middle_left", reset_xform_properties=False
         )
+        self.obj_11_station_1_middle = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/part11/node/Station1/middle_left", name="Station1/middle_left", reset_xform_properties=False
+        )
         self.obj_11_station_0_right = RigidPrimView(
             prim_paths_expr="/World/envs/.*/obj/part11/node/Station0/right", name="Station0/right", reset_xform_properties=False
         )
@@ -306,6 +309,56 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
             name="product_0",
             track_contact_forces=True,
         )
+        self.materials_cube_1 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/cube_01",
+            name="cube_1",
+            track_contact_forces=True,
+        )
+        self.materials_hoop_1 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/hoop_01",
+            name="hoop_1",
+            track_contact_forces=True,
+        )
+        self.materials_bending_tube_1 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tube_01",
+            name="bending_tube_1",
+            track_contact_forces=True,
+        )
+        self.materials_upper_tube_1 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tube_01",
+            name="upper_tube_1",
+            track_contact_forces=True,
+        )
+        self.product_1 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/product_01",
+            name="product_1",
+            track_contact_forces=True,
+        )
+        self.materials_cube_2 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/cube_02",
+            name="cube_2",
+            track_contact_forces=True,
+        )
+        self.materials_hoop_2 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/hoop_02",
+            name="hoop_2",
+            track_contact_forces=True,
+        )
+        self.materials_bending_tube_2 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tube_02",
+            name="bending_tube_2",
+            track_contact_forces=True,
+        )
+        self.materials_upper_tube_2 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tube_02",
+            name="upper_tube_2",
+            track_contact_forces=True,
+        )
+        self.product_2 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/product_02",
+            name="product_2",
+            track_contact_forces=True,
+        )
         scene.add(self.obj_11_station_0)
         scene.add(self.obj_11_station_1)
         scene.add(self.obj_11_welding_0)
@@ -327,10 +380,23 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         scene.add(self.materials_hoop_0)
         scene.add(self.materials_bending_tube_0)
         scene.add(self.materials_upper_tube_0)
-        scene.add(self.product_0)
+        scene.add(self.product_0)        
+        scene.add(self.materials_cube_1)
+        scene.add(self.materials_hoop_1)
+        scene.add(self.materials_bending_tube_1)
+        scene.add(self.materials_upper_tube_1)
+        scene.add(self.product_1)        
+        scene.add(self.materials_cube_2)
+        scene.add(self.materials_hoop_2)
+        scene.add(self.materials_bending_tube_2)
+        scene.add(self.materials_upper_tube_2)
+        scene.add(self.product_2)
         #materials states
-        self.materials : Materials = Materials(cube_list=[self.materials_cube_0], hoop_list=[self.materials_hoop_0], 
-                bending_tube_list=[self.materials_bending_tube_0], upper_tube_list=[self.materials_upper_tube_0], product_list = [self.product_0])
+        self.materials : Materials = Materials(cube_list=[self.materials_cube_0, self.materials_cube_1, self.materials_cube_2], 
+                hoop_list=[self.materials_hoop_0, self.materials_hoop_1, self.materials_hoop_2], 
+                bending_tube_list=[self.materials_bending_tube_0, self.materials_bending_tube_1, self.materials_bending_tube_2], 
+                upper_tube_list=[self.materials_upper_tube_0, self.materials_upper_tube_1, self.materials_upper_tube_2], 
+                product_list = [self.product_0, self.product_1, self.product_2])
         # self.materials_flag_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_cut", 
         # 5:"down", 6:"combine_l", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
         # conveyor
@@ -366,6 +432,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         #welder 
         # self.max_speed_welder = 0.1
         self.welder_inner_oper_time = 0
+        self.welder_outer_oper_time = 0
         self.operator_welder = torch.tensor([0.2], device='cuda:0')
         self.welder_task_dic = {0: "reset", 1:"weld_left", 2:"weld_right", 3:"weld_middle",}
         self.welder_state_dic = {0: "free_empty", 1: "moving_left", 2:"welding_left", 3:"welded_left", 4:"moving_right",
@@ -396,7 +463,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.station_task_outer_middle = 0
         
         self.station_right_task_dic = {0: "reset", 1:"weld"}
-        self.station_state_right_dic = {0: "reset_empty", 1:"placing", 2:"placed", 3:"moving", 4:"welding_right", 5:"rotate_tube_and_welding", 6:"finished", -1:"resetting"}
+        self.station_state_right_dic = {0: "reset_empty", 1:"placing", 2:"placed", 3:"moving", 4:"welding_right", -1:"resetting"}
         self.station_state_inner_right = 0
         self.station_state_outer_right = 0
         self.station_task_outer_right = 0
@@ -433,17 +500,22 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # scene.add(self.frankas._fingertip_centered)
         return
     
-    def add_next_group_to_be_processed(self):
+    def post_next_group_to_be_processed_step(self):
         cube_index = self.materials.find_next_raw_cube_index()
-        self.materials.cube_states[cube_index] = 1
         upper_tube_index = self.materials.find_next_raw_upper_tube_index()
         hoop_index = self.materials.find_next_raw_hoop_index()
         bending_tube_index = self.materials.find_next_raw_bending_tube_index()
         #todo find a way to better choose weld station 
-        station_inner_available = self.station_state_inner_middle <=0 and self.station_state_inner_left<=0 and self.station_state_inner_right<=0
+        # station_inner_available = self.station_state_inner_middle <=0 and self.station_state_inner_left<=0 and self.station_state_inner_right<=0
         # station_outer_available = self.station_state_outer_middle <=0 and self.station_state_outer_left<=0 and self.station_state_outer_right<=0
+        if cube_index<0 or upper_tube_index<0 or hoop_index<0 or bending_tube_index<0:
+            return -1, -1, -1, -1
+        self.materials.cube_states[cube_index] = 1
+        self.materials.hoop_states[hoop_index] = 1
+        self.materials.bending_tube_states[bending_tube_index] = 1
+        self.materials.upper_tube_states[upper_tube_index] = 1
         _dict = {'cube_index':cube_index, 'upper_tube_index':upper_tube_index,  'hoop_index':hoop_index, 'bending_tube_index':bending_tube_index}
-        if station_inner_available:
+        if len(self.proc_groups_inner_list)<=len(self.proc_groups_outer_list):
             _dict['station'] = 'inner'
             self.proc_groups_inner_list.append(cube_index)
         else:

@@ -76,15 +76,18 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         #first check the state
         if  self.convey_state == 0:
             #conveyor is free, we can process it
-            raw_cube_index, upper_tube_index, hoop_index, bending_tube_index  = self.add_next_group_to_be_processed()
-            #todo check convey startup
-            self.materials.cube_convey_index = raw_cube_index
-            self.convey_state = 1
-            self.materials.cube_states[raw_cube_index] = 1
+            raw_cube_index, upper_tube_index, hoop_index, bending_tube_index = self.post_next_group_to_be_processed_step()
+            if raw_cube_index >=0 :
+                #todo check convey startup
+                self.materials.cube_convey_index = raw_cube_index
+                self.convey_state = 1
+                self.materials.cube_states[raw_cube_index] = 2
         elif self.convey_state ==1:
             #conveyor is waiting for the cube 
             if self.put_cube_on_conveyor(self.materials.cube_convey_index):
                 self.convey_state = 2
+                self.materials.cube_list[self.materials.cube_convey_index].set_world_poses(positions=torch.tensor([[-10.3648,   1.9675,   2.9610]], device='cuda:0'), orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
+                self.materials.cube_list[self.materials.cube_convey_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
         elif self.convey_state == 2:
             #start conveying, the threhold means the cube arrived cutting area
             threhold = -20.99342
@@ -94,10 +97,10 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             obj_world_pose = obj.get_world_poses()
             # delta_pose = obj_world_pose[0] - torch.tensor(self.conveyor_pose_list[-1], device='cuda:0') 
             #check the threhold to know whether the cude arrived at cutting position
-            if obj_state == 1:
+            if obj_state == 2:
                 if obj_world_pose[0][0][0] <= threhold:
                     #conveyed to the cutting machine
-                    self.materials.cube_states[obj_index] = 2
+                    self.materials.cube_states[obj_index] = 3
                     self.materials.cube_cut_index = obj_index
                 else:
                     #keep conveying the cube
@@ -105,14 +108,14 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 obj.set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
                 obj.set_velocities(torch.zeros((1,6), device='cuda:0'))
                 return
-            elif obj_state in range(2,5):
-                #2:"conveyed", 3:"cutting", 4:"cut_done",
+            elif obj_state in range(3,6):
+                #3:"conveyed", 4:"cutting", 5:"cut_done",
                 # obj.set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
                 # obj.set_velocities(torch.zeros((1,6), device='cuda:0'))
                 obj.set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
                 obj.set_velocities(torch.zeros((1,6), device='cuda:0'))
                 return
-            elif obj_state == 5:
+            elif obj_state == 6:
                 self.convey_state = 0
                 self.materials.cube_convey_index = -1
         return        
@@ -138,7 +141,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if self.c_machine_oper_time < 10:
                 self.c_machine_oper_time += 1
                 dof_pos_10 = (end_pose - initial_pose)*self.c_machine_oper_time/10 + initial_pose
-                self.materials.cube_states[cube_cut_index] = 3
+                self.materials.cube_states[cube_cut_index] = 4
             elif self.c_machine_oper_time == 10:
                 self.c_machine_oper_time = 0
                 self.cutting_machine_state = 2
@@ -154,7 +157,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.cutting_machine_state = 0
                 dof_pos_10 = initial_pose
                 #for inner gripper start picking the cut cube
-                self.materials.cube_states[cube_cut_index] = 4
+                self.materials.cube_states[cube_cut_index] = 5
                 self.materials.pick_up_place_cube_index = cube_cut_index
                 self.materials.cube_cut_index = -1
         self.obj_part_10.set_joint_positions(dof_pos_10[0])
@@ -171,7 +174,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         gripper_pose_outer = torch.index_select(gripper_pose, 1, torch.tensor([0,2,4,6,8,9,10,11,16,17], device='cuda'))
 
         next_pos_inner = self.post_inner_gripper_step(next_pos_inner, gripper_pose_inner)
-        next_pos_outer = self.post_outer_gripper_step(next_pos_outer, gripper_pose_outer)
+        next_pos_outer = self.post_outer_gripper_step(next_pos_outer, gripper_pose_outer, gripper_pose_inner)
         next_gripper_pose = self.merge_two_grippers_pose(next_gripper_pose, next_pos_inner, next_pos_outer)
 
         self.obj_part_7.set_joint_positions(next_gripper_pose)
@@ -186,27 +189,29 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         translate_tensor = torch.tensor([[-0.65,   1.3,   -1.6]], device='cuda:0') #default as cube
         if self.gripper_inner_state == 0:
             #gripper is free and empty todo
-            stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle #only state == 0 means free, -1 and >= 0 means full
-            if (pick_up_place_cube_index>=0) and not stations_are_full: #pick cut cube by cutting machine
-                # making sure station is available before start picking, moving to cutting machine
-                if self.station_state_inner_middle == 0 or  (self.station_state_outer_middle == 0 and self.gripper_outer_state == 0): #inner weld station is free, start picking
-                    self.gripper_inner_task = 1
-                    self.gripper_inner_state = 1
-            else:
-                #no task to do, reset
-                self.gripper_inner_task = 0
+            self.gripper_inner_task = 0
+            # stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle #only state == 0 means free, -1 and >= 0 means full
+            if (pick_up_place_cube_index>=0): #pick cut cube by cutting machine
+                if self.process_groups_dict[pick_up_place_cube_index]['station'] == 'inner':
+                    if self.station_state_inner_middle == 1: #station is waiting
+                        self.gripper_inner_task = 1
+                        self.gripper_inner_state = 1
+                elif self.process_groups_dict[pick_up_place_cube_index]['station'] == 'outer':
+                    if self.station_state_outer_middle == 1 and self.gripper_outer_state == 0: #station is wating
+                        self.gripper_inner_task = 1
+                        self.gripper_inner_state = 1
             next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], inner_initial_pose[0], 'reset')
         elif self.gripper_inner_state == 1:
             #gripper is picking
             if self.gripper_inner_task == 1: #picking cut cube
-                target_pose = torch.tensor([[0.36, 0, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                target_pose = torch.tensor([[0.5, 0, -0.65, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'pick')
                 if move_done: 
                     #choose which station to place on the cube
                     self.gripper_inner_state = 2
-                    if self.station_state_inner_middle == 1 and self.process_groups_dict[pick_up_place_cube_index]['station'] == 'inner':
+                    if self.process_groups_dict[pick_up_place_cube_index]['station'] == 'inner':
                         self.gripper_inner_task = 2 #place on inner station
-                    elif (self.station_state_outer_middle == 1 and self.gripper_outer_state == 0) and self.process_groups_dict[pick_up_place_cube_index]['station'] == 'outer':
+                    elif self.process_groups_dict[pick_up_place_cube_index]['station'] == 'outer':
                         self.gripper_inner_task = 3 #place on outer station
             elif self.gripper_inner_task == 4: #pick_product_from_inner
                 target_pose = torch.tensor([[-2.55, -1, -0.8, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
@@ -226,23 +231,24 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.station_state_outer_middle = -1
         elif self.gripper_inner_state == 2: #gripper is placeing
             placing_material = None
-            self.materials.cube_states[pick_up_place_cube_index] = 5
             if self.gripper_inner_task == 2: #place_cut_to_inner_station
+                self.materials.cube_states[pick_up_place_cube_index] = 6
                 placing_material = self.materials.cube_list[pick_up_place_cube_index]
                 target_pose = torch.tensor([[-2.4, 0, -1.25, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
                 if move_done:
                     self.gripper_inner_state = 0
-                    self.materials.cube_states[pick_up_place_cube_index] = 6
+                    self.materials.cube_states[pick_up_place_cube_index] = 7
                     self.station_state_inner_middle = 2
                     self.materials.pick_up_place_cube_index = -1
             elif self.gripper_inner_task == 3: #place_cut_to_outer_station
+                self.materials.cube_states[pick_up_place_cube_index] = 6
                 placing_material = self.materials.cube_list[pick_up_place_cube_index]
-                target_pose = torch.tensor([[-2.5 - 3.34, 0, -1.3, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
+                target_pose = torch.tensor([[-5.7, 0, -1.3, 0, 0, 0, 0, 0, 0, 0]], device='cuda:0')
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
                 if move_done:
                     self.gripper_inner_state = 0
-                    self.materials.cube_states[pick_up_place_cube_index] = 7
+                    self.materials.cube_states[pick_up_place_cube_index] = 8
                     self.station_state_outer_middle = 2
                     self.materials.pick_up_place_cube_index = -1
             elif self.gripper_inner_task == 6: #place_product_from_inner
@@ -281,24 +287,22 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             # if self.gripper_inner_task == 
         return next_pos_inner
     
-    def post_outer_gripper_step(self, next_pos_outer, gripper_pose_outer):
+    def post_outer_gripper_step(self, next_pos_outer, gripper_pose_outer, gripper_pose_inner):
         '''if any station have weld upper tube request, activate the outer gripper'''
         pick_up_upper_tube_index = self.materials.pick_up_place_upper_tube_index
         outer_initial_pose = torch.zeros(size=(1,10), device='cuda:0')
         target_pose = torch.zeros(size=(1,10), device='cuda:0')
         if self.gripper_outer_state == 0:
-            if self.station_state_inner_middle == 7 and self.gripper_inner_state == 0: #welded_right
+            self.gripper_outer_task = 0
+            if self.station_state_inner_middle == 7 and self.check_grippers_in_safe_distance(gripper_pose_inner, gripper_pose_outer): #welded_right
                 # check inner gripper reset and wont collide with outer gripper
                 self.materials.pick_up_place_upper_tube_index = self.materials.inner_upper_tube_processing_index
                 self.gripper_outer_state = 1 #Picking
                 self.gripper_outer_task = 1 #pick_upper_tube for inner station
-            elif self.station_state_outer_middle == 7:
+            elif self.station_state_outer_middle == 7 and self.check_grippers_in_safe_distance(gripper_pose_inner, gripper_pose_outer):
                 self.materials.pick_up_place_upper_tube_index = self.materials.outer_upper_tube_processing_index
                 self.gripper_outer_state = 1 #Picking
                 self.gripper_outer_task = 2 #pick_upper_tube for inner station
-            else:
-                #no task to do, reset
-                self.gripper_outer_task = 0
             next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], outer_initial_pose[0], 'reset')
         elif self.gripper_outer_state == 1:
             #gripper is picking
@@ -338,7 +342,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
             elif self.gripper_outer_task == 4:
                 #place upper tube to outer station
-                target_pose = torch.tensor([[3, 0, -0.25, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
+                target_pose = torch.tensor([[5.2, 0, -0.25, 0, 0.045, -0.045, -0.045, -0.045, 0.045,  0.045]], device='cuda:0')
                 next_pos_outer, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_outer[0], target_pose[0], 'place')
                 if move_done:
                     if self.station_state_outer_middle == 7:
@@ -351,7 +355,12 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(
                     positions=position+torch.tensor([[0,   0,   -2]], device='cuda:0'), orientations=orientation)
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
+
         return next_pos_outer
+    
+    def check_grippers_in_safe_distance(self, gripper_inner, gripper_outer):
+        
+        return (torch.abs(gripper_inner[0][0] + 10.73 - gripper_outer[0][0]) > 4 and self.gripper_inner_state == 0)
 
     def merge_two_grippers_pose(self, pose, pose_inner, pose_outer):
         pose[0:7:2] = pose_outer[:4]
@@ -507,15 +516,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if len(self.proc_groups_inner_list) > 0:
                 raw_cube_index = self.proc_groups_inner_list[0]
                 raw_hoop_index = self.process_groups_dict[raw_cube_index]["hoop_index"]
-                if self.materials.hoop_states[raw_hoop_index] == 0:
+                if self.materials.hoop_states[raw_hoop_index] == 1:
                     self.station_state_inner_left = 1
                     self.materials.inner_hoop_processing_index = raw_hoop_index
-                    self.materials.hoop_states[raw_hoop_index] = 1
+                    self.materials.hoop_states[raw_hoop_index] = 2
         elif self.station_state_inner_left == 1: #loading
             # inner_revolution_target = 1.5
             if self.put_hoop_on_weld_station_inner(self.materials.inner_hoop_processing_index):
                 self.station_state_inner_left = 2
-                self.materials.hoop_states[self.materials.inner_hoop_processing_index] = 1
+                self.materials.hoop_states[self.materials.inner_hoop_processing_index] = 3
         elif self.station_state_inner_left == 2: #rotating
             #the station start to rotating 
             inner_revolution_target = 0.0
@@ -573,7 +582,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         if self.station_state_inner_middle == 0:
             if len(self.proc_groups_inner_list) > 0:
                 raw_cube_index = self.proc_groups_inner_list[0]
-                if self.materials.cube_states[raw_cube_index] in range(0, 5): #0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_place_cut",
+                if self.materials.cube_states[raw_cube_index] in range(1, 6): #1:"in_list", 2:"conveying", 3:"conveyed", 4:"cutting", 5:"cut_done", 6:"pick_up_place_cut",
                     self.station_state_inner_middle = 1
                     self.materials.inner_cube_processing_index = raw_cube_index
         elif self.station_state_inner_middle == 1:
@@ -638,15 +647,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if len(self.proc_groups_inner_list) > 0:
                 raw_cube_index = self.proc_groups_inner_list[0]
                 raw_bending_tube_index = self.process_groups_dict[raw_cube_index]["bending_tube_index"]
-                if self.materials.bending_tube_states[raw_bending_tube_index] == 0: #0:"wait"
+                if self.materials.bending_tube_states[raw_bending_tube_index] == 1: #0:"wait"
                     self.station_state_inner_right = 1
                     self.materials.inner_bending_tube_processing_index = raw_bending_tube_index      
-                    self.materials.bending_tube_states[raw_bending_tube_index] = 1    
+                    self.materials.bending_tube_states[raw_bending_tube_index] = 2    
         elif self.station_state_inner_right == 1: #placing
             #place bending tube on the station right 
             if self.put_bending_tube_on_weld_station_inner(self.materials.inner_bending_tube_processing_index):
                 self.station_state_inner_right = 2
-                self.materials.bending_tube_states[self.materials.inner_bending_tube_processing_index] = 2
+                self.materials.bending_tube_states[self.materials.inner_bending_tube_processing_index] = 3
         elif self.station_state_inner_right == 2: #placed
             "waiting for the middle part and welding left task finished"
         elif self.station_state_inner_right == 3: #moving
@@ -772,7 +781,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.welder_inner_oper_time = 0
                 self.welder_inner_state = 7 
                 self.station_state_inner_middle = 7 #welded_right
-                self.station_state_inner_right = -1 #welded_right
+                # self.station_state_inner_right = -1 #welded_right
                 # cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
                 # bending_tube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/bending_tube_" + "{}".format(self.materials.inner_bending_tube_processing_index))
                 # product_prim = self.create_fixed_joint(self.materials.bending_tube_list[self.materials.inner_bending_tube_processing_index], 
@@ -914,15 +923,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if len(self.proc_groups_outer_list) > 0:
                 raw_cube_index = self.proc_groups_outer_list[0]
                 raw_hoop_index = self.process_groups_dict[raw_cube_index]["hoop_index"]
-                if self.materials.hoop_states[raw_hoop_index] == 0:
+                if self.materials.hoop_states[raw_hoop_index] == 1:
                     self.station_state_outer_left = 1
                     self.materials.outer_hoop_processing_index = raw_hoop_index
-                    self.materials.hoop_states[raw_hoop_index] = 1
+                    self.materials.hoop_states[raw_hoop_index] = 2
         elif self.station_state_outer_left == 1: #loading
             # outer_revolution_target = 1.5
             if self.put_hoop_on_weld_station_outer(self.materials.outer_hoop_processing_index):
                 self.station_state_outer_left = 2
-                self.materials.hoop_states[self.materials.outer_hoop_processing_index] = 1
+                self.materials.hoop_states[self.materials.outer_hoop_processing_index] = 3
         elif self.station_state_outer_left == 2: #rotating
             #the station start to rotating 
             outer_revolution_target = 0.0
@@ -980,7 +989,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         if self.station_state_outer_middle == 0:
             if len(self.proc_groups_outer_list) > 0:
                 raw_cube_index = self.proc_groups_outer_list[0]
-                if self.materials.cube_states[raw_cube_index] in range(0, 5): #0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_place_cut",
+                if self.materials.cube_states[raw_cube_index] in range(1, 6): 
                     self.station_state_outer_middle = 1
                     self.materials.outer_cube_processing_index = raw_cube_index
         elif self.station_state_outer_middle == 1:
@@ -1023,16 +1032,16 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.materials.cube_list[self.materials.outer_cube_processing_index].set_world_poses(positions=torch.tensor([[0,0,-100]], device='cuda:0'))
             self.materials.cube_list[self.materials.outer_cube_processing_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
             #set product position
-            position, orientation= (torch.tensor([[-12.3281,  2,  -0.1742]], device='cuda:0'), torch.tensor([[ 9.9978e-01, -6.1045e-04, -2.0787e-02, -4.5162e-05]], device='cuda:0'))
+            position, orientation= (torch.tensor([[-12.3281,  0.4,  -0.1742]], device='cuda:0'), torch.tensor([[ 9.9978e-01, -6.1045e-04, -2.0787e-02, -4.5162e-05]], device='cuda:0'))
             self.materials.product_list[self.materials.outer_cube_processing_index].set_world_poses(positions=position, orientations=orientation)
         elif self.station_state_outer_middle == -1: #resetting middle part
             if torch.abs(dof_outer_middle_A[0] - target_outer_middle_A) <= THRESHOLD:
                 self.station_state_outer_middle = 0
         if self.station_state_outer_middle in range(2,9):
             #set cube pose
-            ref_position, ref_orientation = self.obj_11_station_0_middle.get_world_poses()
+            ref_position, ref_orientation = self.obj_11_station_1_middle.get_world_poses()
             cube_index = self.materials.outer_cube_processing_index
-            self.materials.cube_list[cube_index].set_world_poses(positions=ref_position+torch.tensor([[-2.4, 0,   -0.45]], device='cuda:0'), orientations=ref_orientation)
+            self.materials.cube_list[cube_index].set_world_poses(positions=ref_position+torch.tensor([[-2.4, -4.25,   -0.45]], device='cuda:0'), orientations=ref_orientation)
             self.materials.cube_list[cube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
 
         return target_outer_middle_A, target_outer_middle_B
@@ -1045,15 +1054,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if len(self.proc_groups_outer_list) > 0:
                 raw_cube_index = self.proc_groups_outer_list[0]
                 raw_bending_tube_index = self.process_groups_dict[raw_cube_index]["bending_tube_index"]
-                if self.materials.bending_tube_states[raw_bending_tube_index] == 0: #0:"wait"
+                if self.materials.bending_tube_states[raw_bending_tube_index] == 1: #0:"wait"
                     self.station_state_outer_right = 1
                     self.materials.outer_bending_tube_processing_index = raw_bending_tube_index      
-                    self.materials.bending_tube_states[raw_bending_tube_index] = 1    
+                    self.materials.bending_tube_states[raw_bending_tube_index] = 2  
         elif self.station_state_outer_right == 1: #placing
             #place bending tube on the station right 
             if self.put_bending_tube_on_weld_station_outer(self.materials.outer_bending_tube_processing_index):
                 self.station_state_outer_right = 2
-                self.materials.bending_tube_states[self.materials.outer_bending_tube_processing_index] = 2
+                self.materials.bending_tube_states[self.materials.outer_bending_tube_processing_index] = 3
         elif self.station_state_outer_right == 2: #placed
             "waiting for the middle part and welding left task finished"
         elif self.station_state_outer_right == 3: #moving
@@ -1094,7 +1103,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
 
     def post_outer_welder_step(self):
         THRESHOLD = 0.05
-        welding_left_pose = -3.5
+        welding_left_pose = -3.1
         welding_middle_pose = -2
         welding_right_pose = 0
         target = 0.0 
@@ -1146,7 +1155,6 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.welder_outer_oper_time = 0
                 self.welder_outer_state = 7 
                 self.station_state_outer_middle = 7 #welded_right
-                self.station_state_outer_right = -1 #welded_right
         elif self.welder_outer_state == 7: #welded_right
             target= welding_middle_pose
             if torch.abs(welder_outer_pose[0] - target) <= THRESHOLD and self.welder_outer_task == 3:
@@ -1162,14 +1170,14 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.station_state_outer_middle = 9 #welded_upper
                 self.station_state_outer_left = -1
                 self.welder_outer_task =0
-                self.gripper_outer_task = 4
-                self.gripper_outer_state = 1
+                self.gripper_inner_task = 5 
+                self.gripper_inner_state = 1
                 '''set the upper tube under the ground'''
                 position = torch.tensor([[0,   0,   -100]], device='cuda:0')
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(positions=position)
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
             else:
-                position = torch.tensor([[-21.5430,   3.4130,   1.1422]], device='cuda:0')
+                position = torch.tensor([[-21.5430,   6.7130,   1.1422]], device='cuda:0')
                 orientation = torch.tensor([[ 7.0711e-01, -6.5715e-12,  1.3597e-12,  7.0711e-01]], device='cuda:0')
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(positions=position, orientations=orientation)
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
@@ -1189,7 +1197,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.materials.outer_upper_tube_processing_index = -1   
         if self.welder_outer_state in range(6, 9):
             bending_tube_index = self.materials.outer_bending_tube_processing_index
-            self.materials.bending_tube_list[bending_tube_index].set_world_poses(torch.tensor([[-23.4193,   4.5691,   1.35]], device='cuda:0') ,
+            self.materials.bending_tube_list[bending_tube_index].set_world_poses(torch.tensor([[-23.4193,   7.9,   1.35]], device='cuda:0') ,
                                                                                       orientations=torch.tensor([[ 0.0051,  0.0026, -0.7029,  0.7113]], device='cuda:0'))
             self.materials.bending_tube_list[bending_tube_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
         next_pose, _ = self.get_next_pose_helper(welder_outer_pose[0], target, self.operator_welder)

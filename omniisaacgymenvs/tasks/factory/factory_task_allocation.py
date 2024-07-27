@@ -387,6 +387,8 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
             #conveyor is waiting for the cube 
             if self.put_cube_on_conveyor(self.materials.cube_convey_index):
                 self.convey_state = 2
+                self.materials.cube_list[self.materials.cube_convey_index].set_world_poses(positions=obj_world_pose[0], orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device='cuda:0'))
+                self.materials.cube_list[self.materials.cube_convey_index].set_velocities(torch.zeros((1,6), device='cuda:0'))
         elif self.convey_state == 2:
             #start conveying, the threhold means the cube arrived cutting area
             threhold = -20.99342
