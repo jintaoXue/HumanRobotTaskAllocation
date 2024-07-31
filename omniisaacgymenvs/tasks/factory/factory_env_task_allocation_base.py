@@ -191,7 +191,19 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         physxSceneAPI.CreateGpuCollisionStackSizeAttr().Set(256 * 1024 * 1024)
 
         # self.import_franka_assets(add_to_stage=True)
+        # /obj/multi_people/F_Business_02/female_adult_business_02
         
+        # from pxr import Sdf
+        # # prim_path = Sdf.Path(f"/World/envs/env_0" + "/obj/multi_people/F_Business_02/female_adult_business_02/ManRoot/male_adult_construction_05")
+        # prim_path = Sdf.Path(f"/World/envs/env_0" + "/obj/Characters/male_adult_construction_05/ManRoot/male_adult_construction_05")
+
+        # # /obj/Characters/male_adult_construction_05/ManRoot/male_adult_construction_05
+        # # from omniisaacgymenvs.robots.omni_anim_people.scripts.character_behavior import CharacterBehavior
+        # # self.character_0 = CharacterBehavior(prim_path)
+        # import omni.anim.graph.core as ag
+        # self.character = ag.get_character(str(prim_path))
+
+
         self._stage = get_current_stage()
         # self.create_nut_bolt_material()
         RLTask.set_up_scene(self, scene, replicate_physics=False)
@@ -475,11 +487,12 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_local_poses()
 
         '''for humans and robots'''
-        # from omniisaacgymenvs.robots.omni_anim_people.omni.anim.people.scripts.character_behavior import CharacterBehavior
-        # from omni import kit
-        # omniisaacgymenvs/robots/omni_anim_people/omni/anim/people/scripts/character_behavior.py
-        # _prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/obj/Characters/male_adult_construction_05_new")
-        # CharacterBehavior(_prim)
+        # from omniisaacgymenvs.robots.omni_anim_people.scripts.character_behavior import CharacterBehavior
+        # from pxr import Sdf
+        # prim_path = Sdf.Path(f"/World/envs/env_0" + "/obj/Characters/male_adult_construction_05/ManRoot")
+        # self.character_0 = CharacterBehavior(prim_path)
+        
+        # self.character_0.read_commands_from_file()
         # self.upper_tube_stationt_state_dic = {0:"is_not_full", 1:"fulled"}
         # self.station_state_tube_inner = 0
 

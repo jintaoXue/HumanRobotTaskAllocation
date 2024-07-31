@@ -55,3 +55,7 @@ https://docs.omniverse.nvidia.com/isaacsim/latest/how_to_guides/environment_setu
 #7.14 local_pose transformation to global
 
 https://docs.omniverse.nvidia.com/isaacsim/latest/features/warehouse_logistics/ext_omni_anim_people.html
+
+
+# character_prim_path可能需要注意
+question: https://forums.developer.nvidia.com/t/how-to-control-peoples-animation-in-isaac-using-python-api-rather-than-the-omni-anim-people-extension-with-ui/301824

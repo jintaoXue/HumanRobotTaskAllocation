@@ -79,7 +79,13 @@ class VecEnvBase(gym.Env):
             self._simulation_app = SimulationApp(
                 {"headless": headless, "physics_gpu": sim_device}, experience=experience
             )
-
+            #enable navigation extension 2024.7.31
+            from omni.isaac.core.utils.extensions import enable_extension
+            # Enable the layers and stage windows in the UI
+            enable_extension("omni.anim.navigation.bundle")
+            enable_extension("omni.anim.navigation.core")
+            enable_extension("omni.anim.navigation.ui")
+            self._simulation_app.update()
             if enable_livestream:
                 from omni.isaac.core.utils.extensions import enable_extension
 

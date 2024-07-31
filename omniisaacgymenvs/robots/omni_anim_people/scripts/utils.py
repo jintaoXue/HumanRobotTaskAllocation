@@ -9,8 +9,7 @@
 import carb
 import math
 import omni.usd
-from pxr import Gf, UsdGeom, Usd, UsdSkel, AnimGraphSchema
-
+from pxr import Gf, UsdGeom, Usd, UsdSkel
 
 class Utils:
     """

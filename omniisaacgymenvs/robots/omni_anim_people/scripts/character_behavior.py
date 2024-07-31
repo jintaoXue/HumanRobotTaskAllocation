@@ -21,8 +21,8 @@ from .commands.look_around import *
 from .commands.queue import *
 from .commands.dequeue import *
 from .commands.sit import *
-from omni.anim.people.ui_components import CommandTextWidget
-from omni.anim.people import PeopleSettings
+# from omni.anim.people import PeopleSettings
+from omniisaacgymenvs.robots.omni_anim_people import PeopleSettings
 import importlib
 
 class CharacterBehavior(BehaviorScript):
@@ -73,9 +73,10 @@ class CharacterBehavior(BehaviorScript):
         Defines character variables and loads settings.
         """
         self.setting =  carb.settings.get_settings()
-        self.command_path = self.setting.get(PeopleSettings.COMMAND_FILE_PATH)
-        self.navmeshEnabled = self.setting.get(PeopleSettings.NAVMESH_ENABLED)
-        self.avoidanceOn = self.setting.get(PeopleSettings.DYNAMIC_AVOIDANCE_ENABLED)
+        # self.command_path = self.setting.get(PeopleSettings.COMMAND_FILE_PATH)
+        self.command_path = PeopleSettings.COMMAND_FILE_PATH
+        self.navmeshEnabled = PeopleSettings.NAVMESH_ENABLED
+        self.avoidanceOn = PeopleSettings.DYNAMIC_AVOIDANCE_ENABLED
         self.character_name = self.get_character_name(str(self.prim_path))
         carb.log_info("Character name is {}".format(self.character_name))
         self.character = None

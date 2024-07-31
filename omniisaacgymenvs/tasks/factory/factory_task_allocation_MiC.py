@@ -60,7 +60,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.post_grippers_step()
                 self.post_weld_station_step()
                 self.post_welder_step()
-
+                # self.post_characters_step()
             # self.refresh_base_tensors()
             # self.refresh_env_tensors()
             # self._refresh_task_tensors()
@@ -1203,3 +1203,10 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         next_pose, _ = self.get_next_pose_helper(welder_outer_pose[0], target, self.operator_welder)
         self.obj_11_welding_1.set_joint_positions(next_pose)
         self.obj_11_welding_1.set_joint_velocities(torch.zeros(1, device='cuda:0'))
+    
+    def post_characters_step(self):
+        # self.character_0.get_simulation_commands()
+        # self.world.get_physics_dt()
+        # self.world.current_time
+        self.character_0.on_update(self.world.current_time, self.world.get_physics_dt())
+        return
