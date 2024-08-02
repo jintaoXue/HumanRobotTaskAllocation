@@ -55,11 +55,14 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             is_last_step = self.progress_buf[0] == self.max_episode_length - 1
             #initial pose: self.obj_0_3.get_world_poses() (tensor([[-8.3212,  2.2496,  2.7378]], device='cuda:0'), tensor([[ 0.9977, -0.0665,  0.0074,  0.0064]], device='cuda:0'))
             if not self.materials.done():
-                self.post_conveyor_step()
+                self.post_characters_step()
+                self.post_agvs_step()
+                self.post_conveyor_belt_step()
                 self.post_cutting_machine_step()
                 self.post_grippers_step()
                 self.post_weld_station_step()
                 self.post_welder_step()
+
                 # self.post_characters_step()
             # self.refresh_base_tensors()
             # self.refresh_env_tensors()
@@ -70,8 +73,41 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.get_extras()
 
         return self.obs_buf, self.rew_buf, self.reset_buf, self.extras
+    
+    def post_characters_step(self):
+        # self.character_0.get_simulation_commands()
+        # self.world.get_physics_dt()
+        # self.world.current_time
+        # self.character_0.on_update(self.world.current_time, self.world.get_physics_dt())
+        for charac_idx in range(0, self.characters.num):
+            self.post_character_step(charac_idx)
+        return
+    
+    def post_character_step(self, idx):
+        charac = self.characters.list[idx]
+        state = self.characters.states[idx]
+        task = self.characters.tasks[idx]
+        # corresp_agv_idx = self.characters.corresp_agvs_idxs[idx] 
+        corresp_box_idx = self.characters.corresp_boxs_idxs[idx] 
+        if state == 0: #"worker is free" 
+            if self.state_side_table_hoop == 0:
+                corresp_box_idx = self.transboxs.find_corresp_box_idx_for_charac(charac_idx = idx)
+                if corresp_box_idx >= 0:
+                    task = 1 #putting 
+                    state = 1 
+                    self.characters.corresp_boxs_idxs[idx] = corresp_box_idx
+                    self.transboxs.corresp_charac_idxs[corresp_box_idx] = idx
+                
+        if state == 1: #worker is approaching 
+            if task == 1:
+        
+        return
 
-    def post_conveyor_step(self):
+    def post_agvs_step(self):
+
+        return
+    
+    def post_conveyor_belt_step(self):
         '''material long cube'''
         #first check the state
         if  self.convey_state == 0:
@@ -1204,9 +1240,3 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         self.obj_11_welding_1.set_joint_positions(next_pose)
         self.obj_11_welding_1.set_joint_velocities(torch.zeros(1, device='cuda:0'))
     
-    def post_characters_step(self):
-        # self.character_0.get_simulation_commands()
-        # self.world.get_physics_dt()
-        # self.world.current_time
-        self.character_0.on_update(self.world.current_time, self.world.get_physics_dt())
-        return

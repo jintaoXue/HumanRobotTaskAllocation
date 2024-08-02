@@ -82,7 +82,14 @@ class Materials(object):
         self.bending_tube_states = [0]*len(self.bending_tube_list)
         self.upper_tube_states = [0]*len(self.upper_tube_list)
         self.product_states = [0]*len(self.product_list)
-        #conveyor
+        '''#for workers and agv to conveying the materials'''
+        # self.cube_convey_states = [0]*len(self.cube_list)
+        self.hoop_state_dic = {0:"wait", 1:"in_box", 2:"on_table"}
+        self.bending_tube_state_dic = {0:"wait", 1:"in_box", 2:"on_table"}
+        self.hoop_convey_states = [0]*len(self.hoop_list)
+        self.bending_tube_convey_states = [0]*len(self.bending_tube_list)
+        # self.upper_tube_convey_states = [0]*len(self.upper_tube_list)
+        #for belt conveyor
         self.cube_convey_index = -1
         #cutting machine
         self.cube_cut_index = -1
@@ -143,7 +150,54 @@ class Materials(object):
         except:
             return -1
         # return self.bending_tube_states.index(0)
+
+
+class Characters(object):
+    def __init__(self, character_list) -> None:
+        self.num = len(character_list)
+        self.list = character_list
+        self.state_character_dic = {0:"free", 1:""}
+        self.task_character_dic = {0:"free", 1:"put_hoop_into_box"}
+        self.states = [0]*self.num
+        self.tasks = [0]*self.num
+        self.corresp_boxs_idxs = [-1]*self.num
+        # self.corresp_agvs_idxs = [-1]*self.num
+        return
     
+class TransBoxs(object):
+    def __init__(self, boxs_list) -> None:
+        self.boxs = boxs_list
+        self.num = len(boxs_list)
+        self.state_boxs_dic = {}
+        self.task_boxs_dic = {}
+        self.states = [0]*self.num
+        self.tasks = [0]*self.num
+        self.corresp_agvs_idxs = [-1]*self.num
+        self.corresp_charac_idxs = [-1]*self.num
+        return
+    
+    def find_corresp_box_idx_for_charac(self, charac_idx):
+        try:
+            return self.corresp_charac_idxs.index(charac_idx)
+        except:
+            try:
+                return self.corresp_charac_idxs.index(-1)
+            except: 
+                return -1
+            
+
+class Agvs(object):
+    def __init__(self, agv_list) -> None:
+        self.list = agv_list
+        self.num = len(agv_list)
+        self.state_boxs_dic = {}
+        self.task_boxs_dic = {}
+        self.states = [0]*self.num
+        self.tasks = [0]*self.num
+        self.corresp_box_idxs = [-1]*self.num
+        return
+
+
 class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
     def __init__(self, name, sim_config, env) -> None:
         """Initialize base superclass. Initialize instance variables."""
@@ -297,77 +351,77 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
             prim_paths_expr="/World/envs/.*/obj/part2/Loaders/Loader1", name="obj_2_loader_1", reset_xform_properties=False
         )
         self.materials_cube_0 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/cube_0",
+            prim_paths_expr="/World/envs/.*/obj/Materials/cubes/cube_0",
             name="cube_0",
             track_contact_forces=True,
         )
         self.materials_hoop_0 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/hoop_0",
+            prim_paths_expr="/World/envs/.*/obj/Materials/hoops/hoop_0",
             name="hoop_0",
             track_contact_forces=True,
         )
         self.materials_bending_tube_0 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tube_0",
+            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tubes/bending_tube_0",
             name="bending_tube_0",
             track_contact_forces=True,
         )
         self.materials_upper_tube_0 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tube_0",
+            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tubes/upper_tube_0",
             name="upper_tube_0",
             track_contact_forces=True,
         )
         self.product_0 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/product_0",
+            prim_paths_expr="/World/envs/.*/obj/Materials/products/product_0",
             name="product_0",
             track_contact_forces=True,
         )
         self.materials_cube_1 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/cube_01",
+            prim_paths_expr="/World/envs/.*/obj/Materials/cubes/cube_01",
             name="cube_1",
             track_contact_forces=True,
         )
         self.materials_hoop_1 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/hoop_01",
+            prim_paths_expr="/World/envs/.*/obj/Materials/hoops/hoop_01",
             name="hoop_1",
             track_contact_forces=True,
         )
         self.materials_bending_tube_1 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tube_01",
+            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tubes/bending_tube_01",
             name="bending_tube_1",
             track_contact_forces=True,
         )
         self.materials_upper_tube_1 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tube_01",
+            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tubes/upper_tube_01",
             name="upper_tube_1",
             track_contact_forces=True,
         )
         self.product_1 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/product_01",
+            prim_paths_expr="/World/envs/.*/obj/Materials/products/product_01",
             name="product_1",
             track_contact_forces=True,
         )
         self.materials_cube_2 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/cube_02",
+            prim_paths_expr="/World/envs/.*/obj/Materials/cubes/cube_02",
             name="cube_2",
             track_contact_forces=True,
         )
         self.materials_hoop_2 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/hoop_02",
+            prim_paths_expr="/World/envs/.*/obj/Materials/hoops/hoop_02",
             name="hoop_2",
             track_contact_forces=True,
         )
         self.materials_bending_tube_2 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tube_02",
+            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tubes/bending_tube_02",
             name="bending_tube_2",
             track_contact_forces=True,
         )
         self.materials_upper_tube_2 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tube_02",
+            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tubes/upper_tube_02",
             name="upper_tube_2",
             track_contact_forces=True,
         )
         self.product_2 = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/obj/Materials/product_02",
+            prim_paths_expr="/World/envs/.*/obj/Materials/products/product_02",
             name="product_2",
             track_contact_forces=True,
         )
@@ -486,7 +540,60 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.proc_groups_outer_list = []
         hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_local_poses()
 
-        '''for humans and robots'''
+        '''side table state'''
+        self.side_table_state_dic = {0: "empty", 1:"placing", 2:"placed"}
+        self.table_capacity = 4
+        self.num_side_table_hoop = 0
+        self.num_side_table_bending_tube = 0
+        self.state_side_table_hoop = 0
+        self.state_side_table_bending_tube = 0
+
+        '''for humans workers (characters) and robots (agv+boxs)'''
+        self.character_1 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Characters/male_adult_construction_01",
+            name="character_1",
+            track_contact_forces=True,
+        )
+        self.character_2 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Characters/male_adult_construction_02",
+            name="character_2",
+            track_contact_forces=True,
+        )
+        scene.add(self.character_1)
+        scene.add(self.character_2)
+        character_list = [self.character_1, self.character_2]
+        self.characters = Characters(character_list)
+
+        self.box_1 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/AGVs/box_01",
+            name="box_1",
+            track_contact_forces=True,
+        )
+        self.box_2 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/AGVs/box_02",
+            name="box_2",
+            track_contact_forces=True,
+        )
+        scene.add(self.box_1)
+        scene.add(self.box_2)
+        box_list = [self.box_1, self.box_2]
+        self.transboxs = TransBoxs(box_list)
+
+
+        self.agv_1 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/AGVs/agv_01",
+            name="agv_1",
+            track_contact_forces=True,
+        )
+        self.agv_2 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/AGVs/agv_02",
+            name="agv_2",
+            track_contact_forces=True,
+        )
+        scene.add(self.agv_1)
+        scene.add(self.agv_2)
+        agv_list = [self.agv_1, self.agv_2]
+        self.agvs = Agvs(agv_list)
         # from omniisaacgymenvs.robots.omni_anim_people.scripts.character_behavior import CharacterBehavior
         # from pxr import Sdf
         # prim_path = Sdf.Path(f"/World/envs/env_0" + "/obj/Characters/male_adult_construction_05/ManRoot")
