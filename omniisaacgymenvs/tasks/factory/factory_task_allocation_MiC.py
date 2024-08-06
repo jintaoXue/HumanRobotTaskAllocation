@@ -74,7 +74,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
 
         return self.obs_buf, self.rew_buf, self.reset_buf, self.extras
     
-    def post_characters_step(self):
+    def   post_characters_step(self):
         # self.character_0.get_simulation_commands()
         # self.world.get_physics_dt()
         # self.world.current_time
@@ -89,19 +89,36 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         task = self.characters.tasks[idx]
         # corresp_agv_idx = self.characters.corresp_agvs_idxs[idx] 
         corresp_box_idx = self.characters.corresp_boxs_idxs[idx] 
+        target_pose = None
         if state == 0: #"worker is free" 
             if self.state_side_table_hoop == 0:
                 corresp_box_idx = self.transboxs.find_corresp_box_idx_for_charac(charac_idx = idx)
                 if corresp_box_idx >= 0:
-                    task = 1 #putting 
+                    task = 1 #put_hoop_into_box 
                     state = 1 
                     self.characters.corresp_boxs_idxs[idx] = corresp_box_idx
                     self.transboxs.corresp_charac_idxs[corresp_box_idx] = idx
-                
+            elif self.state_side_table_bending_tube == 0:
+                a = 1
         if state == 1: #worker is approaching 
             if task == 1:
+                target_pose = self.characters.initial_pose_hoop
         
+                
         return
+    
+    def path_planner(self):
+        import omni.anim.navigation.core as nav
+        import omni.usd
+        # stage = omni.usd.get_context().get_stage()
+        inav = nav.acquire_interface()
+
+        # Set the start and end points. If valid, new path points will be generated along the NavMesh.
+        path = inav.query_navmesh_path((10, 10, 0), (10, 15, 0))
+        path_points = path.query_navmesh_path()
+        print(path_points.get_points())
+        #todo navigation
+
 
     def post_agvs_step(self):
 

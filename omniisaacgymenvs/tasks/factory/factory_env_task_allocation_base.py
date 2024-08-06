@@ -61,6 +61,7 @@ from omni.isaac.core.articulations import ArticulationView
 from omni.usd import get_world_transform_matrix, get_local_transform_matrix
 
 class Materials(object):
+
     def __init__(self, cube_list : list, hoop_list : list, bending_tube_list : list, upper_tube_list: list, product_list : list) -> None:
 
         self.cube_list = cube_list
@@ -106,6 +107,9 @@ class Materials(object):
         self.outer_cube_processing_index = -1
         self.outer_bending_tube_processing_index = -1
         self.outer_upper_tube_processing_index = -1
+
+        self.initial_hoop_pose = None
+        self.initial_bending_tube_pose = None
 
     def get_world_poses(self, list):
         poses = []
@@ -153,6 +157,7 @@ class Materials(object):
 
 
 class Characters(object):
+
     def __init__(self, character_list) -> None:
         self.num = len(character_list)
         self.list = character_list
@@ -161,10 +166,13 @@ class Characters(object):
         self.states = [0]*self.num
         self.tasks = [0]*self.num
         self.corresp_boxs_idxs = [-1]*self.num
+
+        self.initial_pose_hoop = None
         # self.corresp_agvs_idxs = [-1]*self.num
         return
     
 class TransBoxs(object):
+
     def __init__(self, boxs_list) -> None:
         self.boxs = boxs_list
         self.num = len(boxs_list)
@@ -185,7 +193,6 @@ class TransBoxs(object):
             except: 
                 return -1
             
-
 class Agvs(object):
     def __init__(self, agv_list) -> None:
         self.list = agv_list
@@ -579,21 +586,21 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         box_list = [self.box_1, self.box_2]
         self.transboxs = TransBoxs(box_list)
 
-
-        self.agv_1 = RigidPrimView(
+        self.agv_1 = ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/AGVs/agv_01",
             name="agv_1",
-            track_contact_forces=True,
+            reset_xform_properties=False,
         )
-        self.agv_2 = RigidPrimView(
+        self.agv_2 = ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/AGVs/agv_02",
             name="agv_2",
-            track_contact_forces=True,
+            reset_xform_properties=False,
         )
         scene.add(self.agv_1)
         scene.add(self.agv_2)
         agv_list = [self.agv_1, self.agv_2]
         self.agvs = Agvs(agv_list)
+        '''Ending: for humans workers (characters) and robots (agv+boxs)'''
         # from omniisaacgymenvs.robots.omni_anim_people.scripts.character_behavior import CharacterBehavior
         # from pxr import Sdf
         # prim_path = Sdf.Path(f"/World/envs/env_0" + "/obj/Characters/male_adult_construction_05/ManRoot")

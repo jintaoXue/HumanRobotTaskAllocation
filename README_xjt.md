@@ -59,3 +59,7 @@ https://docs.omniverse.nvidia.com/isaacsim/latest/features/warehouse_logistics/e
 
 # character_prim_path可能需要注意
 question: https://forums.developer.nvidia.com/t/how-to-control-peoples-animation-in-isaac-using-python-api-rather-than-the-omni-anim-people-extension-with-ui/301824
+
+# 8.6
+
+route planning: https://developer.nvidia.com/blog/optimizing-robot-route-planning-with-nvidia-cuopt-for-isaac-sim/
