@@ -362,7 +362,7 @@ class FactoryTaskAlloc(FactoryEnvTaskAlloc, FactoryABCTask):
                 self.post_grippers_step()
                 self.post_weld_station_step()
                 self.post_welder_step()
-
+                
             # self.refresh_base_tensors()
             # self.refresh_env_tensors()
             # self._refresh_task_tensors()

@@ -161,7 +161,7 @@ class Characters(object):
     def __init__(self, character_list) -> None:
         self.num = len(character_list)
         self.list = character_list
-        self.state_character_dic = {0:"free", 1:""}
+        self.state_character_dic = {0:"free", 1:"approaching"}
         self.task_character_dic = {0:"free", 1:"put_hoop_into_box"}
         self.states = [0]*self.num
         self.tasks = [0]*self.num
@@ -169,6 +169,12 @@ class Characters(object):
 
         self.initial_pose_hoop = None
         # self.corresp_agvs_idxs = [-1]*self.num
+        self.x_path = None
+        self.y_path = None
+        self.path_idx = 0
+
+        self.picking_pose_hoop = None
+        self.picking_pose_bending_tube = None
         return
     
 class TransBoxs(object):
@@ -186,12 +192,9 @@ class TransBoxs(object):
     
     def find_corresp_box_idx_for_charac(self, charac_idx):
         try:
-            return self.corresp_charac_idxs.index(charac_idx)
-        except:
-            try:
-                return self.corresp_charac_idxs.index(-1)
-            except: 
-                return -1
+            return self.corresp_charac_idxs.index(-1)
+        except: 
+            return -1
             
 class Agvs(object):
     def __init__(self, agv_list) -> None:

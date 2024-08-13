@@ -34,10 +34,13 @@ PYTHON_PATH omniisaacgymenvs/scripts/rlgames_train.py task=FactoryTaskNutBoltPic
 import torch
 from typing import Tuple
 from omniisaacgymenvs.tasks.factory.factory_task_allocation import FactoryTaskAlloc
+from omniisaacgymenvs.tasks.factory.factory_env_task_allocation_base import Characters
 from omni.isaac.core.prims import RigidPrimView
 from omni.physx.scripts import utils
 from pxr import Gf, Sdf, Usd, UsdPhysics, UsdGeom, PhysxSchema
 from omni.usd import get_world_transform_matrix
+
+from omniisaacgymenvs.scripts.hybridAstar import hybridAStar 
 
 MAX_FLOAT = 3.40282347e38
 # import numpy as np
@@ -56,7 +59,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             #initial pose: self.obj_0_3.get_world_poses() (tensor([[-8.3212,  2.2496,  2.7378]], device='cuda:0'), tensor([[ 0.9977, -0.0665,  0.0074,  0.0064]], device='cuda:0'))
             if not self.materials.done():
                 self.post_characters_step()
-                self.post_agvs_step()
+                self.post_boxes_agvs_step()
                 self.post_conveyor_belt_step()
                 self.post_cutting_machine_step()
                 self.post_grippers_step()
@@ -84,7 +87,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         return
     
     def post_character_step(self, idx):
-        charac = self.characters.list[idx]
+        charac : RigidPrimView = self.characters.list[idx]
         state = self.characters.states[idx]
         task = self.characters.tasks[idx]
         # corresp_agv_idx = self.characters.corresp_agvs_idxs[idx] 
@@ -96,18 +99,36 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 if corresp_box_idx >= 0:
                     task = 1 #put_hoop_into_box 
                     state = 1 
+                    self.state_side_table_hoop = 1
                     self.characters.corresp_boxs_idxs[idx] = corresp_box_idx
                     self.transboxs.corresp_charac_idxs[corresp_box_idx] = idx
             elif self.state_side_table_bending_tube == 0:
-                a = 1
+                corresp_box_idx = self.transboxs.find_corresp_box_idx_for_charac(charac_idx = idx)
+                if corresp_box_idx >= 0:
+                    task = 2 #put_hoop_into_box 
+                    state = 1 
+                    self.state_side_table_bending_tube = 1
+                    self.characters.corresp_boxs_idxs[idx] = corresp_box_idx
+                    self.transboxs.corresp_charac_idxs[corresp_box_idx] = idx
         if state == 1: #worker is approaching 
-            if task == 1:
-                target_pose = self.characters.initial_pose_hoop
+            if self.characters.x_path == None:
+                current_pose = charac.get_world_poses()
+                if task == 1:
+                    x_path, y_path, yaw = self.path_planner(current_pose, self.characters.picking_pose_hoop)
+                elif task == 2:
+                    target_pose = self.characters.picking_pose_bending_tube
+            else:
+                target_pose = 
         
                 
         return
+
+    def post_boxes_agvs_step(self):
+
+        return
     
-    def path_planner(self):
+
+    def path_planner(self, s, g):
         import omni.anim.navigation.core as nav
         import omni.usd
         # stage = omni.usd.get_context().get_stage()
@@ -120,9 +141,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         #todo navigation
 
 
-    def post_agvs_step(self):
 
-        return
     
     def post_conveyor_belt_step(self):
         '''material long cube'''

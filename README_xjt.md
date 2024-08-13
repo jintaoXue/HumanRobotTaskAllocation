@@ -63,3 +63,10 @@ question: https://forums.developer.nvidia.com/t/how-to-control-peoples-animation
 # 8.6
 
 route planning: https://developer.nvidia.com/blog/optimizing-robot-route-planning-with-nvidia-cuopt-for-isaac-sim/
+
+# 8.12
+occupancy map
+x-50 30
+y-30 40
+
+# 8.13
