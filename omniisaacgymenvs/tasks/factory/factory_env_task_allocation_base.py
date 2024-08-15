@@ -177,6 +177,21 @@ class Characters(object):
         self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
         return
     
+    def assign_task(self, task):
+        idx = self.find_available_charac()
+        if
+        if task == 'hoop_preparing':
+            idx = self.find_available_charac()
+        elif task == 'bending_tube_preparing':
+            idx = self.find_available_charac()
+        return
+    
+    def find_available_charac(self):
+        try:
+            return self.states(0)
+        except: 
+            return -1
+
     def step_next_pose(self, charac_idx = 0):
         reaching_flag = False
         self.path_idxs[charac_idx] += 1
@@ -196,6 +211,7 @@ class Characters(object):
         self.y_paths[charac_idx] = []
         self.yaws[charac_idx] = []
         self.path_idxs[charac_idx] = 0
+
 
 class Agvs(object):
 
@@ -282,6 +298,10 @@ class TaskManager(object):
         self.agvs = Agvs(agv_list = agv_list)
         self.boxs = TransBoxs(box_list=box_list)
         return
+    
+    def assign_task(self, task):
+        if task == 'hoop_preparing':
+            self.characs.assign_task(task)
 
 class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
     def __init__(self, name, sim_config, env) -> None:

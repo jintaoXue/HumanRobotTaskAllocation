@@ -81,7 +81,9 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
     def post_task_manager_step(self):
         #assign task material loading, cutting machine, place product
         if self.state_side_table_hoop == 0:
-            
+            self.task_manager.assign_task(task = 'hoop_preparing')
+        if self.state_side_table_bending_tube == 0:
+            self.task_manager.assign_task(task = 'bending_tube_preparing')
         self.post_characters_agvs_step()
 
     def  post_characters_agvs_step(self):
