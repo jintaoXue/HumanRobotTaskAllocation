@@ -59,7 +59,7 @@ from omni.isaac.core.utils.stage import get_current_stage
 from omni.isaac.core.articulations import ArticulationView
 
 from omni.usd import get_world_transform_matrix, get_local_transform_matrix
-
+from omniisaacgymenvs.utils.geometry import quaternion  
 class Materials(object):
 
     def __init__(self, cube_list : list, hoop_list : list, bending_tube_list : list, upper_tube_list: list, product_list : list) -> None:
@@ -161,52 +161,127 @@ class Characters(object):
     def __init__(self, character_list) -> None:
         self.num = len(character_list)
         self.list = character_list
-        self.state_character_dic = {0:"free", 1:"approaching"}
-        self.task_character_dic = {0:"free", 1:"put_hoop_into_box"}
+        self.state_character_dic = {0:"free", 1:"approaching", 2:"waiting_box"}
+        self.task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box"}
         self.states = [0]*self.num
         self.tasks = [0]*self.num
         self.corresp_boxs_idxs = [-1]*self.num
 
-        self.initial_pose_hoop = None
         # self.corresp_agvs_idxs = [-1]*self.num
-        self.x_path = None
-        self.y_path = None
-        self.path_idx = 0
+        self.x_paths = [[] for i in range(len(character_list))]
+        self.y_paths = [[] for i in range(len(character_list))]
+        self.yaws = [[] for i in range(len(character_list))]
+        self.path_idxs = [0 for i in range(len(character_list))]
 
-        self.picking_pose_hoop = None
-        self.picking_pose_bending_tube = None
+        self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
+        self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
         return
     
+    def step_next_pose(self, charac_idx = 0):
+        reaching_flag = False
+        self.path_idxs[charac_idx] += 1
+        path_idx = self.path_idxs[charac_idx]
+        if path_idx == len(self.x_paths[charac_idx] - 1):
+            reaching_flag = True
+            self.reset_path(charac_idx)
+        
+        position = [self.x_paths[charac_idx][path_idx], self.y_paths[charac_idx][path_idx], 0]
+        euler_angles = [0,0, self.yaws[charac_idx][path_idx]]
+        orientation = quaternion.eulerAnglesToQuaternion(euler_angles)
+
+        return position, orientation, reaching_flag
+    
+    def reset_path(self, charac_idx):
+        self.x_paths[charac_idx] = []
+        self.y_paths[charac_idx] = []
+        self.yaws[charac_idx] = []
+        self.path_idxs[charac_idx] = 0
+
+class Agvs(object):
+
+    def __init__(self, agv_list) -> None:
+        self.list = agv_list
+        self.num = len(agv_list)
+        self.state_dic = {0:"free", 1:"moving_to_box", 2:"carrying_box", 3:"fulling"}
+        self.task_dic = {0:"free", 1:"carry_box_to_hoop", 2:"carry_box_to_bending_tube", 3:"carry_box_to_hoop_table", 4:"carry_box_to_bending_tube_table"}
+        self.states = [0]*self.num
+        self.tasks = [0]*self.num
+        self.corresp_box_idxs = [-1]*self.num
+        self.corresp_charac_idxs = [-1]*self.num
+        self.moving_with_box_flags = [False]*self.num
+
+        self.x_paths = [[] for i in range(len(agv_list))]
+        self.y_paths = [[] for i in range(len(agv_list))]
+        self.yaws = [[] for i in range(len(agv_list))]
+        self.path_idxs = [0 for i in range(len(agv_list))]
+
+        self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
+        self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+        return
+    
+    def find_corresp_box_idx(self, agv_idx):
+        #use agv_idx for short distance matching
+        try:
+            return self.corresp_box_idxs.index(-1)
+        except: 
+            return -1
+    
+    def step_next_pose(self, agv_idx = 0):
+        reaching_flag = False
+        self.path_idxs[agv_idx] += 1
+        path_idx = self.path_idxs[agv_idx]
+        if path_idx == len(self.x_paths[agv_idx] - 1):
+            reaching_flag = True
+            self.reset_path(agv_idx)
+        
+        position = [self.x_paths[agv_idx][path_idx], self.y_paths[agv_idx][path_idx], 0]
+        euler_angles = [0,0, self.yaws[agv_idx][path_idx]]
+        orientation = quaternion.eulerAnglesToQuaternion(euler_angles)
+        return position, orientation, reaching_flag
+    
+    def reset_path(self, agv_idx):
+        self.x_paths[agv_idx] = []
+        self.y_paths[agv_idx] = []
+        self.yaws[agv_idx] = []
+        self.path_idxs[agv_idx] = 0
+
+
 class TransBoxs(object):
 
-    def __init__(self, boxs_list) -> None:
-        self.boxs = boxs_list
-        self.num = len(boxs_list)
+    def __init__(self, box_list) -> None:
+        self.list = box_list
+        self.num = len(box_list)
+        self.state_dic = {0:"free", 1:"waiting_for_agv", 2:"waiting", 3:"fulling"}
+        # self.task_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box"}
         self.state_boxs_dic = {}
         self.task_boxs_dic = {}
         self.states = [0]*self.num
         self.tasks = [0]*self.num
         self.corresp_agvs_idxs = [-1]*self.num
         self.corresp_charac_idxs = [-1]*self.num
+
+        self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
+        self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+
+        self.hoop_idx_list = []
+        self.bending_tube_idx_list = []
+        self.capacity = 4
+
         return
     
-    def find_corresp_box_idx_for_charac(self, charac_idx):
+    def find_corresp_box_idx_for_charac(self):
         try:
             return self.corresp_charac_idxs.index(-1)
         except: 
             return -1
-            
-class Agvs(object):
-    def __init__(self, agv_list) -> None:
-        self.list = agv_list
-        self.num = len(agv_list)
-        self.state_boxs_dic = {}
-        self.task_boxs_dic = {}
-        self.states = [0]*self.num
-        self.tasks = [0]*self.num
-        self.corresp_box_idxs = [-1]*self.num
-        return
 
+
+class TaskManager(object):
+    def __init__(self, character_list, agv_list, box_list) -> None:
+        self.characs = Characters(character_list=character_list)
+        self.agvs = Agvs(agv_list = agv_list)
+        self.boxs = TransBoxs(box_list=box_list)
+        return
 
 class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
     def __init__(self, name, sim_config, env) -> None:
@@ -572,7 +647,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         scene.add(self.character_1)
         scene.add(self.character_2)
         character_list = [self.character_1, self.character_2]
-        self.characters = Characters(character_list)
+        # self.characters = Characters(character_list)
 
         self.box_1 = RigidPrimView(
             prim_paths_expr="/World/envs/.*/obj/AGVs/box_01",
@@ -587,7 +662,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         scene.add(self.box_1)
         scene.add(self.box_2)
         box_list = [self.box_1, self.box_2]
-        self.transboxs = TransBoxs(box_list)
+        # self.transboxs = TransBoxs(box_list)
 
         self.agv_1 = ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/AGVs/agv_01",
@@ -602,7 +677,9 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         scene.add(self.agv_1)
         scene.add(self.agv_2)
         agv_list = [self.agv_1, self.agv_2]
-        self.agvs = Agvs(agv_list)
+        # self.agvs = Agvs(agv_list)
+
+        self.task_manager : TaskManager = TaskManager(character_list, agv_list, box_list)
         '''Ending: for humans workers (characters) and robots (agv+boxs)'''
         # from omniisaacgymenvs.robots.omni_anim_people.scripts.character_behavior import CharacterBehavior
         # from pxr import Sdf

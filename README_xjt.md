@@ -70,3 +70,4 @@ x-50 30
 y-30 40
 
 # 8.13
+https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles

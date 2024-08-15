@@ -2,7 +2,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-import draw
+from . import draw
 
 # parameters initiation
 STEP_SIZE = 0.2

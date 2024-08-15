@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from heapdict import heapdict
 import scipy.spatial.kdtree as kd
-import reeds_shepp as rsCurve
+from . import reeds_shepp as rsCurve
 
 class Car:
     scale = 5
