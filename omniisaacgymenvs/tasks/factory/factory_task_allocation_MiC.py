@@ -34,7 +34,7 @@ PYTHON_PATH omniisaacgymenvs/scripts/rlgames_train.py task=FactoryTaskNutBoltPic
 import torch
 from typing import Tuple
 from omniisaacgymenvs.tasks.factory.factory_task_allocation import FactoryTaskAlloc
-from omniisaacgymenvs.tasks.factory.factory_env_task_allocation_base import Characters
+from omniisaacgymenvs.tasks.factory.factory_env_task_allocation_base import TaskManager
 from omni.isaac.core.prims import RigidPrimView
 from omni.physx.scripts import utils
 from pxr import Gf, Sdf, Usd, UsdPhysics, UsdGeom, PhysxSchema
@@ -46,6 +46,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 MAX_FLOAT = 3.40282347e38
 # import numpy as np
+
+def world_pose_to_navigation_pose(world_pose):
+    position, orientation = world_pose[0][0].cpu(), world_pose[1][0].cpu()
+    euler_angles = quaternion.quaternionToEulerAngles(orientation.numpy())
+    nav_pose = [position[0], position[1], euler_angles[2]]
+    return nav_pose
+
 class FactoryTaskAllocMiC(FactoryTaskAlloc):
     def post_physics_step(
         self,
@@ -80,80 +87,62 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
     
     def post_task_manager_step(self):
         #assign task material loading, cutting machine, place product
-        if self.state_side_table_hoop == 0:
-            self.task_manager.assign_task(task = 'hoop_preparing')
-        if self.state_side_table_bending_tube == 0:
-            self.task_manager.assign_task(task = 'bending_tube_preparing')
-        self.post_characters_agvs_step()
-
-    def  post_characters_agvs_step(self):
-        # self.character_0.get_simulation_commands()
-        # self.world.get_physics_dt()
-        # self.world.current_time
-        # self.character_0.on_update(self.world.current_time, self.world.get_physics_dt())
-        for charac_idx in range(0, self.characters.num):
+        if self.state_side_table_hoop == 0 and self.materials.hoop_states.index(1) >= 0:
+            if self.task_manager.assign_task(task = 'hoop_preparing'):
+                self.state_side_table_hoop == 1
+        if self.state_side_table_bending_tube == 0 and self.materials.bending_tube_states.index(1) >= 0:
+            if self.task_manager.assign_task(task = 'bending_tube_preparing'):
+                self.state_side_table_bending_tube == 1
+        self.task_manager.step()
+        
+        for charac_idx in range(0, self.task_manager.characters.num):
             self.post_character_step(charac_idx)
-        for agv_idx in range(0, self.agvs.num):
+        for agv_idx in range(0, self.task_manager.agvs.num):
             self.post_agv_step(agv_idx)
-        for box_idx in range(0, self.transboxs.num):
+        for box_idx in range(0, self.task_manager.boxs.num):
             self.post_trans_box_step(box_idx)
-        return
     
     def post_character_step(self, idx):
-        charac : RigidPrimView = self.characters.list[idx]
-        state = self.characters.states[idx]
-        task = self.characters.tasks[idx]
-        # corresp_agv_idx = self.characters.corresp_agvs_idxs[idx] 
-        corresp_box_idx = self.characters.corresp_boxs_idxs[idx] 
+        charac : RigidPrimView = self.task_manager.characters.list[idx]
+        state = self.task_manager.characters.states[idx]
+        task = self.task_manager.characters.tasks[idx]
+        # corresp_agv_idx = self.task_manager.characters.corresp_agvs_idxs[idx] 
+        corresp_box_idx = self.task_manager.characters.corresp_box_idxs[idx] 
+        current_pose = charac.get_world_poses()
         target_position = None
         target_orientation = None
-        current_pose = charac.get_world_poses()
         if state == 0: #"worker is free" 
-            if self.state_side_table_hoop == 0:
-                corresp_box_idx = self.transboxs.find_corresp_box_idx_for_charac()
-                if corresp_box_idx >= 0:
-                    self.characters.tasks[idx] = 1 #put_hoop_into_box 
-                    self.characters.states[idx] = 1 
-                    self.state_side_table_hoop = 1
-                    self.characters.corresp_boxs_idxs[idx] = corresp_box_idx
-                    self.transboxs.corresp_charac_idxs[corresp_box_idx] = idx
-            elif self.state_side_table_bending_tube == 0:
-                corresp_box_idx = self.transboxs.find_corresp_box_idx_for_charac()
-                if corresp_box_idx >= 0:
-                    self.characters.tasks[idx] = 2 #put_hoop_into_box 
-                    self.characters.states[idx] = 1 
-                    self.state_side_table_bending_tube = 1
-                    self.characters.corresp_boxs_idxs[idx] = corresp_box_idx
-                    self.transboxs.corresp_charac_idxs[corresp_box_idx] = idx
+            if task > 0:
+                self.task_manager.characters.states[idx] = 1
             target_position, target_orientation = current_pose
         elif state == 1: #worker is approaching 
-            if len(self.characters.x_paths[idx]) == 0:
-                position, orientation = current_pose[0].cpu()[0], current_pose[1].cpu()[0]
+            if len(self.task_manager.characters.x_paths[idx]) == 0:
+                position, orientation = current_pose[0][0].cpu(), current_pose[1][0].cpu()
                 euler_angles = quaternion.quaternionToEulerAngles(orientation.numpy())
                 s = [position[0], position[1], euler_angles[2]]
                 # matrix = Gf.Matrix4d()
-                # orientation = current_pose[1].cpu()[0]
+                # orientation = current_pose[1][0].cpu()
                 # matrix.SetRotateOnly(Gf.Quatd(float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])))
                 # A = matrix.ExtractRotation().GetAngle()
                 if task == 1:
-                    g = self.characters.picking_pose_hoop
-                    self.characters.x_paths[idx], self.characters.y_paths[idx], self.characters.yaws[idx] = self.path_planner(s, g)
+                    g = self.task_manager.characters.picking_pose_hoop
+                    self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.path_planner(s, g)
                 elif task == 2:
-                    g = self.characters.picking_pose_bending_tube
-                    self.characters.x_paths[idx], self.characters.y_paths[idx], self.characters.yaws[idx] = self.path_planner(s, g)
-                self.characters.path_idxs[idx] = 0
-            target_position, target_orientation, reaching_flag = self.characters.step_next_pose(charac_idx = idx)
+                    g = self.task_manager.characters.picking_pose_bending_tube
+                    self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.path_planner(s, g)
+                # self.task_manager.characters.path_idxs[idx] = 0
+            target_position, target_orientation, reaching_flag = self.task_manager.characters.step_next_pose(charac_idx = idx)
             target_position, target_orientation = torch.tensor([target_position], device='cuda:0'), torch.tensor([target_orientation], device='cuda:0')
             if reaching_flag:
-                self.characters.states[idx] = 2
+                self.task_manager.characters.states[idx] = 2
         elif state == 2: #worker is waiting
-            corresp_box_idx = self.characters.corresp_boxs_idxs[idx]
-            if self.transboxs.states[corresp_box_idx] == 2:
-                self.characters.states[idx] = 3
+            if corresp_box_idx >= 0 and self.task_manager.boxs.states[corresp_box_idx] == 2:
+                self.task_manager.characters.states[idx] = 3
             target_position, target_orientation = charac.get_world_poses()
-        elif state == 3: #worker is doing
+        elif state == 3: #worker is loading
             if task == 1:
-
+                if self.task_manager.characters.loading_operation_time_steps[idx] > self.task_manager.characters.LOADING_TIME:
+                    self.task_manager.boxs.hoop_idx_list[idx].append()
             elif task == 2:
 
 
@@ -161,93 +150,86 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
 
         return
     def post_agv_step(self, idx):
-        agv : RigidPrimView = self.agvs.list[idx]
-        state = self.agvs.states[idx]
-        task = self.agvs.tasks[idx]
-        # corresp_agv_idx = self.characters.corresp_agvs_idxs[idx] 
-        corresp_charac_idx = self.agvs.corresp_charac_idxs[idx] 
-        corresp_box_idx = self.agvs.corresp_box_idxs[idx] 
+        agv : RigidPrimView = self.task_manager.agvs.list[idx]
+        state = self.task_manager.agvs.states[idx]
+        task = self.task_manager.agvs.tasks[idx]
+        corresp_charac_idx = self.task_manager.agvs.corresp_charac_idxs[idx] 
+        corresp_box_idx = self.task_manager.agvs.corresp_box_idxs[idx] 
         target_position = None
         target_orientation = None
         current_pose = agv.get_world_poses()
         if state == 0: #"free"
             target_position, target_orientation = current_pose
-            if corresp_charac_idx >= 0:
-                if self.characters.tasks[corresp_charac_idx] == 1: #picking hoop 
-                    self.agvs.states[idx] = 1
-                    self.agvs.tasks[idx] = 1
-                elif self.characters.tasks[corresp_charac_idx] == 2: #picking bending tube
-                    self.agvs.states[idx] = 1
-                    self.agvs.tasks[idx] = 2
+            if task > 0:
+                self.task_manager.agvs.states[idx] = 1
         elif state == 1: #moving to box
             if corresp_box_idx < 0:
-                self.agvs.find_corresp_box_idx(idx)
-            box_position, _ = self.transboxs.list[corresp_box_idx].get_world_poses()
-            dis = torch.norm(box_position[0][:2] - current_pose[0][0][:2])
-            if dis < 0.1:
-                self.agvs.moving_with_box_flags[idx] = True
-                self.agvs.states[idx] = 2
                 target_position, target_orientation = current_pose
             else:
-                if len(self.agvs.x_paths[idx]) == 0:
-                    position, orientation = current_pose[0].cpu()[0], current_pose[1].cpu()[0]
-                    euler_angles = quaternion.quaternionToEulerAngles(orientation.numpy())
-                    s = [position[0], position[1], euler_angles[2]]
-                    if task == 1:
-                        g = self.agvs.picking_pose_hoop
-                        self.agvs.x_paths[idx], self.agvs.y_paths[idx], self.agvs.yaws[idx] = self.path_planner(s, g)
-                    elif task == 2:
-                        g = self.agvs.picking_pose_bending_tube
-                        self.agvs.x_paths[idx], self.agvs.y_paths[idx], self.agvs.yaws[idx] = self.path_planner(s, g)
-                    self.agvs.path_idxs[idx] = 0
-                target_position, target_orientation, reaching_flag = self.agvs.step_next_pose(agv_idx = idx)
+                # box_position, _ = self.task_manager.boxs.list[corresp_box_idx].get_world_poses()
+                # dis = torch.norm(box_position[0][:2] - current_pose[0][0][:2])
+                # if dis < 0.1:
+                #     self.task_manager.boxs.tasks[idx] = 2
+                #     self.task_manager.agvs.states[idx] = 2
+                #     target_position, target_orientation = current_pose
+                # else:
+                if len(self.task_manager.agvs.x_paths[idx]) == 0:
+                    box_pose = self.task_manager.boxs.list[corresp_box_idx]
+                    s, g = world_pose_to_navigation_pose(current_pose), world_pose_to_navigation_pose(box_pose)
+                    self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s, g)
+                target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
                 target_position, target_orientation = torch.tensor([target_position], device='cuda:0'), torch.tensor([target_orientation], device='cuda:0')
                 if reaching_flag:
-                    self.agvs.states[idx] = 2
-                    
-        elif state == 2: #moved to box and carrying_box
-                if len(self.agvs.x_paths[idx]) == 0:
-                    position, orientation = current_pose[0].cpu()[0], current_pose[1].cpu()[0]
-                    euler_angles = quaternion.quaternionToEulerAngles(orientation.numpy())
-                    s = [position[0], position[1], euler_angles[2]]
-                    if task == 1:
-                        g = self.agvs.picking_pose_hoop
-                        self.agvs.x_paths[idx], self.agvs.y_paths[idx], self.agvs.yaws[idx] = self.path_planner(s, g)
-                    elif task == 2:
-                        g = self.agvs.picking_pose_bending_tube
-                        self.agvs.x_paths[idx], self.agvs.y_paths[idx], self.agvs.yaws[idx] = self.path_planner(s, g)
-                    self.agvs.path_idxs[idx] = 0
-                target_position, target_orientation, reaching_flag = self.agvs.step_next_pose(agv_idx = idx)
-                target_position, target_orientation = torch.tensor([target_position], device='cuda:0'), torch.tensor([target_orientation], device='cuda:0')
+                    self.task_manager.agvs.states[idx] = 2         
+                    self.task_manager.boxs.tasks[idx] = 2
+        elif state == 2: #carrying_box
+            if len(self.task_manager.agvs.x_paths[idx]) == 0:
+                position, orientation = current_pose[0][0].cpu(), current_pose[1][0].cpu()
+                euler_angles = quaternion.quaternionToEulerAngles(orientation.numpy())
+                s = [position[0], position[1], euler_angles[2]]
+                if task == 1:
+                    g = self.task_manager.agvs.picking_pose_hoop
+                    self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s, g)
+                elif task == 2:
+                    g = self.task_manager.agvs.picking_pose_bending_tube
+                    self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s, g)
+                self.task_manager.agvs.path_idxs[idx] = 0
+            target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
+            target_position, target_orientation = torch.tensor([target_position], device='cuda:0'), torch.tensor([target_orientation], device='cuda:0')
+                if reaching_flag:
+                    self.task_manager.agvs.states[idx] = 3
+        elif state == 3: #finished carrying box to the target position and waiting for worker loading task
+            if 
+        agv.set_world_poses(positions=target_position, orientations=target_orientation)  
 
+        return 
+    
     def post_trans_box_step(self, idx):
-        box : RigidPrimView = self.transboxs.list[idx]
-        state = self.transboxs.states[idx]
-        task = self.transboxs.tasks[idx]
-        # corresp_agv_idx = self.characters.corresp_agvs_idxs[idx] 
-        corresp_charac_idx = self.transboxs.corresp_charac_idxs[idx] 
-        corresp_agv_idx = self.transboxs.corresp_agvs_idxs[idx] 
+        box : RigidPrimView = self.task_manager.boxs.list[idx]
+        state = self.task_manager.boxs.states[idx]
+        task = self.task_manager.boxs.tasks[idx]
+        # corresp_agv_idx = self.task_manager.characters.corresp_agvs_idxs[idx] 
+        corresp_charac_idx = self.task_manager.boxs.corresp_charac_idxs[idx] 
+        corresp_agv_idx = self.task_manager.boxs.corresp_agv_idxs[idx] 
         target_position = None
         target_orientation = None
         current_pose = box.get_world_poses()
         # capacity
         if state == 0: #free
             target_position, target_orientation = current_pose
-            if corresp_charac_idx >= 0:
-                if self.characters.tasks[corresp_charac_idx] == 1: #picking hoop 
-                    self.transboxs.states[idx] = 1
-                    self.transboxs.tasks[idx] = 1
-                elif self.characters.tasks[corresp_charac_idx] == 2: #picking bending tube
-                    self.transboxs.states[idx] = 1
-                    self.transboxs.tasks[idx] = 2
-        if state == 1: #wating for agv
+            if task == 1:
+                self.task_manager.boxs.states[idx] = 1
+            elif task == 2 :
+                self.task_manager.boxs.states[idx] = 2
+        elif state == 1: #wating for agv
             target_position, target_orientation = current_pose
-            if corresp_agv_idx < 0:
-                self.transboxs.corresp_agvs_idxs[idx]  = self.agvs.find_corresp_agv_idx_for_box()
-            elif "agv is carrying box":
-                self.transboxs.states[idx] = 2
-        if state == 2: #moving with agv to target pose
-            target_position, target_orientation = self.agvs.list[corresp_agv_idx].get_world_poses()
+            if corresp_agv_idx >= 0 and task == 2:
+                self.task_manager.boxs.states[idx] = 2
+        elif state == 2: #moving with box 
+            target_position, target_orientation = self.task_manager.agvs.list[corresp_agv_idx]
+        
+        box.set_world_poses(positions=target_position, orientations=target_orientation)
+        return
 
     def path_planner(self, s, g):
         xyResolution = 5
@@ -771,7 +753,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         if self.station_state_inner_left in range(1,6) and inner_hoop_index >= 0:
             hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_world_poses()
             matrix = Gf.Matrix4d()
-            orientation = hoop_world_pose_orientation.cpu()[0]
+            orientation = hoop_world_pose_orientation[0].cpu()
             matrix.SetRotateOnly(Gf.Quatd(float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])))
             translate = Gf.Vec4d(0,0,0.6,0)*matrix
             translate_tensor = torch.tensor(translate[:3], device='cuda:0')
@@ -1178,7 +1160,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         if self.station_state_outer_left in range(1,6) and outer_hoop_index >= 0:
             hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_1_revolution.get_world_poses()
             matrix = Gf.Matrix4d()
-            orientation = hoop_world_pose_orientation.cpu()[0]
+            orientation = hoop_world_pose_orientation[0].cpu()
             matrix.SetRotateOnly(Gf.Quatd(float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])))
             translate = Gf.Vec4d(0,0,0.6,0)*matrix
             translate_tensor = torch.tensor(translate[:3], device='cuda:0')

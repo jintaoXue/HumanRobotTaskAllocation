@@ -74,7 +74,7 @@ class Materials(object):
                                    7:"placed_station_inner", 8:"placed_station_outer", 9:"welding_left", 10:"welding_right", 11:"welding_upper",
                                    12:"process_done", 13:"pick_up_place_product"}
         self.hoop_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"loading", 3:"loaded"}
-        self.bending_tube_state_dic = {}
+        self.bending_tube_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"loading", 3:"loaded"}
         self.upper_tube_state_dic = {}
         self.product_state_dic = {0:"waitng", 1:"placed", -1:"finished"}
 
@@ -162,11 +162,11 @@ class Characters(object):
         self.num = len(character_list)
         self.list = character_list
         self.state_character_dic = {0:"free", 1:"approaching", 2:"waiting_box"}
-        self.task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box"}
+        self.task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box", 3:"cutting_machine"}
         self.states = [0]*self.num
         self.tasks = [0]*self.num
-        self.corresp_boxs_idxs = [-1]*self.num
-
+        self.corresp_agv_idxs = [-1]*self.num
+        self.corresp_box_idxs = [-1]*self.num
         # self.corresp_agvs_idxs = [-1]*self.num
         self.x_paths = [[] for i in range(len(character_list))]
         self.y_paths = [[] for i in range(len(character_list))]
@@ -175,20 +175,27 @@ class Characters(object):
 
         self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
         self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+
+        self.LOADING_TIME = 5
+        self.loading_operation_time_steps = [0 for i in range(len(character_list))]
         return
     
     def assign_task(self, task):
+        #todo 
         idx = self.find_available_charac()
-        if
+        if idx == -1:
+            return idx
         if task == 'hoop_preparing':
-            idx = self.find_available_charac()
+            # idx = self.find_available_charac()
+            self.tasks[idx] = 1 
         elif task == 'bending_tube_preparing':
-            idx = self.find_available_charac()
-        return
+            # idx = self.find_available_charac()
+            self.tasks[idx] = 2
+        return idx
     
     def find_available_charac(self):
         try:
-            return self.states(0)
+            return self.tasks.index(0)
         except: 
             return -1
 
@@ -222,9 +229,8 @@ class Agvs(object):
         self.task_dic = {0:"free", 1:"carry_box_to_hoop", 2:"carry_box_to_bending_tube", 3:"carry_box_to_hoop_table", 4:"carry_box_to_bending_tube_table"}
         self.states = [0]*self.num
         self.tasks = [0]*self.num
-        self.corresp_box_idxs = [-1]*self.num
         self.corresp_charac_idxs = [-1]*self.num
-        self.moving_with_box_flags = [False]*self.num
+        self.corresp_box_idxs = [-1]*self.num
 
         self.x_paths = [[] for i in range(len(agv_list))]
         self.y_paths = [[] for i in range(len(agv_list))]
@@ -235,10 +241,22 @@ class Agvs(object):
         self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
         return
     
-    def find_corresp_box_idx(self, agv_idx):
-        #use agv_idx for short distance matching
+    def assign_task(self, task):
+        #todo 
+        idx = self.find_available_agv()
+        if idx == -1:
+            return idx
+        if task == 'hoop_preparing':
+            # idx = self.find_available_charac()
+            self.tasks[idx] = 1 
+        elif task == 'bending_tube_preparing':
+            # idx = self.find_available_charac()
+            self.tasks[idx] = 2
+        return idx
+    
+    def find_available_agv(self):
         try:
-            return self.corresp_box_idxs.index(-1)
+            return self.tasks.index(0)
         except: 
             return -1
     
@@ -267,41 +285,82 @@ class TransBoxs(object):
     def __init__(self, box_list) -> None:
         self.list = box_list
         self.num = len(box_list)
-        self.state_dic = {0:"free", 1:"waiting_for_agv", 2:"waiting", 3:"fulling"}
-        # self.task_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box"}
+        self.state_dic = {0:"free", 1:"waiting", 2:"moving", 3:"loading", 4:"fulling"}
+        self.task_dic = {0:"free", 1:"waiting_agv", 2:"moving_with_box"}
         self.state_boxs_dic = {}
         self.task_boxs_dic = {}
         self.states = [0]*self.num
         self.tasks = [0]*self.num
-        self.corresp_agvs_idxs = [-1]*self.num
+        self.corresp_agv_idxs = [-1]*self.num
         self.corresp_charac_idxs = [-1]*self.num
 
         self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
         self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
 
-        self.hoop_idx_list = []
-        self.bending_tube_idx_list = []
+        self.hoop_idx_list =[[] for i in range(len(box_list))]
+        self.bending_tube_idx_list = [[] for i in range(len(box_list))]
         self.capacity = 4
 
         return
     
-    def find_corresp_box_idx_for_charac(self):
+    def assign_task(self, task):
+        #todo 
+        idx = self.find_available_box()
+        if idx == -1:
+            return idx
+        if task == 'hoop_preparing' or task == 'bending_tube_preparing':
+            # idx = self.find_available_charac()
+            self.tasks[idx] = 1 
+        return idx
+    
+    def find_available_box(self):
         try:
-            return self.corresp_charac_idxs.index(-1)
+            return self.tasks.index(0)
         except: 
             return -1
 
 
 class TaskManager(object):
     def __init__(self, character_list, agv_list, box_list) -> None:
-        self.characs = Characters(character_list=character_list)
+        self.characters = Characters(character_list=character_list)
         self.agvs = Agvs(agv_list = agv_list)
         self.boxs = TransBoxs(box_list=box_list)
+        self.task_dic = {'hoop_preparing': 0, 'bending_tube_preparing': 1}
+        self.task_in_list = []
+        self.task_in_dic = {}
         return
     
     def assign_task(self, task):
-        if task == 'hoop_preparing':
-            self.characs.assign_task(task)
+        
+        charac_idx = self.characters.assign_task(task)
+        agv_idx = self.agvs.assign_task(task)
+        box_idx = self.boxs.assign_task(task)
+        if charac_idx == -1 or agv_idx == -1 or box_idx == -1:
+            lacking_resource = True            
+
+        self.task_in_list.append(task)
+        self.task_in_dic[task] = {'charac_idx': charac_idx, 'agv_idx': agv_idx, 'box_idx': box_idx, 'lacking_resource': lacking_resource}
+
+        self.characters.corresp_agv_idxs[charac_idx] = agv_idx
+        self.characters.corresp_box_idxs[charac_idx] = box_idx
+        self.agvs.corresp_charac_idxs[agv_idx] = charac_idx
+        self.agvs.corresp_box_idxs[agv_idx] = box_idx
+        self.boxs.corresp_charac_idxs[box_idx] = charac_idx
+        self.boxs.corresp_agv_idxs[box_idx] = agv_idx
+
+        return True
+
+    def step(self):
+        for task in self.task_in_list:
+            if self.task_in_dic[task]['lacking_resource']:
+                if self.task_in_dic[task]['charac_idx'] == -1:
+                    self.task_in_dic[task]['charac_idx'] = self.characters.assign_task()
+                if self.task_in_dic[task]['agv_idx'] == -1:
+                    self.task_in_dic[task]['agv_idx'] = self.agvs.assign_task()
+                if self.task_in_dic[task]['box_idx'] == -1:
+                    self.task_in_dic[task]['box_idx'] = self.boxs.assign_task()
+                self.task_in_dic[task]['lacking_resource'] = list(self.task_in_dic.values()).index(-1) >= 0
+        return 
 
 class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
     def __init__(self, name, sim_config, env) -> None:
