@@ -334,7 +334,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.task_manager.agvs.states[idx] = 3
                 if task == 5: #reset agvs state
                     self.task_manager.agvs.reset(idx)
-                    self.task_manager.boxs.states[corresp_box_idx] = 2 #waiting
+                    self.task_manager.boxs.states[corresp_box_idx] = 1 #waiting
                     self.task_manager.boxs.tasks[corresp_box_idx] = 3 #collect products
         elif state == 3: #finished carrying box to the target position and waiting 
             target_position, target_orientation = current_pose
@@ -360,10 +360,12 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.task_manager.boxs.states[idx] = 1
             elif task == 2 :
                 self.task_manager.boxs.states[idx] = 2
-        elif state == 1: #wating for agv
+        elif state == 1: #wating
             target_position, target_orientation = current_pose
             if corresp_agv_idx >= 0 and task == 2: #moving_with_box
                 self.task_manager.boxs.states[idx] = 2
+            elif task == 3 #collect_product
+                
         elif state == 2: #moving
             target_position, target_orientation = self.task_manager.agvs.list[corresp_agv_idx]
         
