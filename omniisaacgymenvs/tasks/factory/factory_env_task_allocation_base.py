@@ -163,7 +163,7 @@ class Characters(object):
         self.num = len(character_list)
         self.list = character_list
         self.state_character_dic = {0:"free", 1:"approaching", 2:"waiting_box", 3:"putting_in_box", 4:"putting_on_table"}
-        self.task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box", 3:"put_hoop_on_table", 4:"put_bending_tube_on_table", 
+        self.sub_task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box", 3:"put_hoop_on_table", 4:"put_bending_tube_on_table", 
                                     5:'hoop_loading_inner', 6:'bending_tube_loading_inner', 7:'hoop_loading_outer', 8: 'bending_tube_loading_outer', 9: 'cutting_cube', 10:'placing_product'}
         
         self.task_range = {'hoop_preparing', 'bending_tube_preparing', 'hoop_loading_inner', 'bending_tube_loading_inner', 'hoop_loading_outer', 'bending_tube_loading_outer', "cutting_cube", 
@@ -195,6 +195,12 @@ class Characters(object):
         self.loading_operation_time_steps = [0 for i in range(len(character_list))]
         return
     
+    def reset(self, idx):
+        self.states[idx] = 0
+        self.tasks[idx] = 0
+        self.corresp_agv_idxs[idx] = -1
+        self.corresp_box_idxs[idx] = -1
+
     def assign_task(self, high_level_task):
         #todo 
         if high_level_task not in self.task_range:
@@ -254,8 +260,8 @@ class Agvs(object):
     def __init__(self, agv_list) -> None:
         self.list = agv_list
         self.num = len(agv_list)
-        self.state_dic = {0:"free", 1:"moving_to_box", 2:"carrying_box", 3:"fulling"}
-        self.task_dic = {0:"free", 1:"carry_box_to_hoop", 2:"carry_box_to_bending_tube", 3:"waiting", 4:"carry_box_to_hoop_table", 5:"carry_box_to_bending_tube_table", 6:'collect_product', 7:'placing_product'}
+        self.state_dic = {0:"free", 1:"moving_to_box", 2:"carrying_box", 3:"waiting"}
+        self.sub_task_dic = {0:"free", 1:"carry_box_to_hoop", 2:"carry_box_to_bending_tube", 3:"carry_box_to_hoop_table", 4:"carry_box_to_bending_tube_table", 5:'collect_product', 6:'placing_product'}
         self.task_range = {'hoop_preparing', 'bending_tube_preparing', 'collect_product','placing_product'}
 
         self.states = [0]*self.num
@@ -272,8 +278,17 @@ class Agvs(object):
         self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
         self.picking_pose_table_hoop = [-0.09067, 13.12021, np.deg2rad(0)]
         self.picking_pose_table_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+
+        self.collecting_product_pose = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.placing_product_pose = [-0.09067, 13.12021, np.deg2rad(0)]
         return
     
+    def reset(self, idx):
+        self.tasks[idx] = 0
+        self.states[idx] = 0
+        self.corresp_charac_idxs[idx] = -1
+        self.corresp_box_idxs[idx] = -1
+
     def assign_task(self, high_level_task):
         #todo 
         if high_level_task not in self.task_range:
@@ -325,7 +340,7 @@ class TransBoxs(object):
         self.list = box_list
         self.num = len(box_list)
         self.state_dic = {0:"free", 1:"waiting", 2:"moving"}
-        self.task_dic = {0:"free", 1:"waiting_agv", 2:"moving_with_box"}
+        self.sub_task_dic = {0:"free", 1:"waiting_agv", 2:"moving_with_box", 3: "collect_product"}
         self.task_range = {'hoop_preparing', 'bending_tube_preparing', 'collect_product','placing_product'}
 
         self.states = [0]*self.num
@@ -342,9 +357,14 @@ class TransBoxs(object):
         self.CAPACITY = 4
         self.counts = [0 for i in range(len(box_list))]
 
-        self.full_products_box_idx = -1
         return
     
+    def reset(self, idx):
+        self.tasks[idx] = 0
+        self.states[idx] = 0
+        self.corresp_charac_idxs[idx] = -1
+        self.corresp_agv_idxs[idx] = -1
+
     def assign_task(self, high_level_task):
         #todo
         if high_level_task not in self.task_range:
@@ -352,12 +372,12 @@ class TransBoxs(object):
         
         if high_level_task == 'placing_product':
             return self.find_full_products_box_idx()
-        
         idx = self.find_available_box()
         if idx == -1:
             return idx
         # if high_level_task == 'hoop_preparing' or high_level_task == 'bending_tube_preparing' or high_level_task == 'colle':
             # idx = self.find_available_charac()
+
         self.tasks[idx] = 1 
         return idx
     
@@ -410,23 +430,11 @@ class TaskManager(object):
         return True
 
     def task_clearing(self, task):
+
         charac_idx, agv_idx, box_idx = self.task_in_dic[task]['charac_idx'], self.task_in_dic[task]['agv_idx'], self.task_in_dic[task]['box_idx']
-        self.characters.states[charac_idx] = 0
-        self.characters.tasks[charac_idx] = 0
-
-        self.agvs.tasks[agv_idx] = 0
-        self.agvs.states[agv_idx] = 0
-
-        self.boxs.tasks[box_idx] = 0
-        self.boxs.states[box_idx] = 0
-
-        self.characters.corresp_agv_idxs[charac_idx] = -1
-        self.characters.corresp_box_idxs[charac_idx] = -1
-        self.agvs.corresp_charac_idxs[agv_idx] = -1
-        self.agvs.corresp_box_idxs[agv_idx] = -1
-        self.boxs.corresp_charac_idxs[box_idx] = -1
-        self.boxs.corresp_agv_idxs[box_idx] = -1
-
+        self.characters.reset(charac_idx)
+        self.agvs.reset(agv_idx)
+        self.boxs.reset(box_idx)
         self.task_in_set.remove(task)
         del self.task_in_dic[task]
 

@@ -116,7 +116,8 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.task_manager.assign_task(task='cutting_cube') 
         if self.state_side_table_bending_tube == 2 and self.state_side_table_hoop == 2 and 'collect_product' not in self.task_manager.task_in_dic.keys():
             self.task_manager.assign_task(task='collect_product')
-        if self.task_manager.boxs.is_full_products():
+        if 'collect_product' in self.task_manager.task_in_dic.keys() and self.task_manager.boxs.is_full_products():
+            self.task_manager.task_clearing(task='collect_product')
             self.task_manager.assign_task(task='placing_product')
         self.task_manager.step()
         
@@ -213,13 +214,14 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         elif state == 4: #putting materails
             target_position, target_orientation = current_pose
             if self.task_manager.boxs.counts[corresp_box_idx] == 0: #finished 
-                self.task_manager.task_clearing(task)
                 if task == 3:
                     self.state_side_table_hoop = 2 #placed
+                    self.task_manager.task_clearing(task='hoop_preparing')
                 elif task == 4:
                     self.state_side_table_bending_tube = 2 #placed
+                    self.task_manager.task_clearing(task='bending_tube_preparing')
                 elif task == 10: 
-                    ''
+                    self.task_manager.task_clearing(task='placing_product')
             elif self.task_manager.characters.loading_operation_time_steps[idx] > self.task_manager.characters.PUTTING_TIME:
                 self.task_manager.characters.loading_operation_time_steps[idx] = 0
                 self.task_manager.boxs.counts[corresp_box_idx] -= 1
@@ -246,25 +248,29 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.side_table_hoop_set.remove(self.materials.inner_hoop_processing_index)
                     self.station_state_inner_left == 2
                     self.materials.hoop_states[self.materials.inner_hoop_processing_index] = 5
+                    self.task_manager.task_clearing(task='hoop_loading_inner')
                 elif task == 6:
                     self.side_table_bending_tube_set.remove(self.materials.inner_bending_tube_processing_index)  
                     self.station_state_inner_right = 2    
-                    self.materials.bending_tube_states[self.materials.inner_bending_tube_processing_index] = 5              
+                    self.materials.bending_tube_states[self.materials.inner_bending_tube_processing_index] = 5
+                    self.task_manager.task_clearing(task='bending_tube_loading_inner')            
                 elif task == 7:
                     self.side_table_hoop_set.remove(self.materials.outer_hoop_processing_index)  
                     self.station_state_outer_left = 2       
                     self.materials.hoop_states[self.materials.outer_hoop_processing_index] = 5           
+                    self.task_manager.task_clearing(task='hoop_loading_outer')
                 elif task == 8:
                     self.side_table_bending_tube_set.remove(self.materials.outer_bending_tube_processing_index)
                     self.station_state_outer_right = 2
                     self.materials.bending_tube_states[self.materials.outer_bending_tube_processing_index] = 5
+                    self.task_manager.task_clearing(task='bending_tube_loading_outer')
             else:
                 self.task_manager.characters.loading_operation_time_steps[idx] += 1
         elif state == 6: #cutting machine
             target_position, target_orientation = current_pose
             self.c_machine_oper_time += 1
             if self.cutting_machine_state == 2: #is resetting
-                self.task_manager.task_clearing(task)
+                self.task_manager.task_clearing(task='cutting_cube')
             
         charac.set_world_poses(positions=target_position, orientations=target_orientation)    
 
@@ -301,8 +307,8 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
                 target_position, target_orientation = torch.tensor([target_position], device='cuda:0'), torch.tensor([target_orientation], device='cuda:0')
                 if reaching_flag:
-                    self.task_manager.agvs.states[idx] = 2         
-                    self.task_manager.boxs.tasks[idx] = 2
+                    self.task_manager.agvs.states[idx] = 2 #carrying_box       
+                    self.task_manager.boxs.tasks[idx] = 2 #moving_with_box
         elif state == 2: #carrying_box
             if len(self.task_manager.agvs.x_paths[idx]) == 0:
                 position, orientation = current_pose[0][0].cpu(), current_pose[1][0].cpu()
@@ -316,12 +322,20 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     g = self.task_manager.agvs.picking_pose_table_hoop
                 elif task == 4:
                     g = self.task_manager.agvs.picking_pose_table_bending_tube
+                elif task == 5:
+                    g = self.task_manager.agvs.collecting_product_pose
+                elif task == 6:
+                    g = self.task_manager.agvs.placing_product_pose
                 self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s, g)
                 # self.task_manager.agvs.path_idxs[idx] = 0
             target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
             target_position, target_orientation = torch.tensor([target_position], device='cuda:0'), torch.tensor([target_orientation], device='cuda:0')
             if reaching_flag:
                 self.task_manager.agvs.states[idx] = 3
+                if task == 5: #reset agvs state
+                    self.task_manager.agvs.reset(idx)
+                    self.task_manager.boxs.states[corresp_box_idx] = 2 #waiting
+                    self.task_manager.boxs.tasks[corresp_box_idx] = 3 #collect products
         elif state == 3: #finished carrying box to the target position and waiting 
             target_position, target_orientation = current_pose
 
@@ -355,7 +369,6 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         
         box.set_world_poses(positions=target_position, orientations=target_orientation)
         return
-
 
     def post_side_table_step(self):
         if len(self.side_table_hoop_set) > 0:
