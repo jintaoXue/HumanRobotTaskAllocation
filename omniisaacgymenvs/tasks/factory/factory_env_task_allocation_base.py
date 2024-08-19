@@ -368,9 +368,6 @@ class TransBoxs(object):
         self.corresp_charac_idxs[idx] = -1
         self.corresp_agv_idxs[idx] = -1
 
-        if self.product_collecting_idx == idx:
-            self.product_collecting_idx = -1
-
     def assign_task(self, high_level_task):
         #todo
         if high_level_task not in self.task_range:
@@ -378,13 +375,17 @@ class TransBoxs(object):
         
         if high_level_task == 'placing_product':
             return self.find_full_products_box_idx()
+        
         idx = self.find_available_box()
         if idx == -1:
+            if high_level_task == 'collect_product':
+                self.product_collecting_idx = -1
             return idx
         # if high_level_task == 'hoop_preparing' or high_level_task == 'bending_tube_preparing' or high_level_task == 'colle':
             # idx = self.find_available_charac()
         if high_level_task == 'collect_product':
             self.product_collecting_idx = idx
+            
         self.tasks[idx] = 1 
         return idx
     

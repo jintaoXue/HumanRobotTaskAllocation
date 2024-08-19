@@ -364,8 +364,8 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             target_position, target_orientation = current_pose
             if corresp_agv_idx >= 0 and task == 2: #moving_with_box
                 self.task_manager.boxs.states[idx] = 2
-            elif task == 3 #collect_product
-                
+            elif task == 3: #collect_product
+                ''
         elif state == 2: #moving
             target_position, target_orientation = self.task_manager.agvs.list[corresp_agv_idx]
         
