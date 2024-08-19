@@ -60,6 +60,7 @@ from omni.isaac.core.articulations import ArticulationView
 
 from omni.usd import get_world_transform_matrix, get_local_transform_matrix
 from omniisaacgymenvs.utils.geometry import quaternion  
+
 class Materials(object):
 
     def __init__(self, cube_list : list, hoop_list : list, bending_tube_list : list, upper_tube_list: list, product_list : list) -> None:
@@ -73,8 +74,8 @@ class Materials(object):
         self.cube_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"conveying", 3:"conveyed", 4:"cutting", 5:"cut_done", 6:"pick_up_place_cut", 
                                    7:"placed_station_inner", 8:"placed_station_outer", 9:"welding_left", 10:"welding_right", 11:"welding_upper",
                                    12:"process_done", 13:"pick_up_place_product"}
-        self.hoop_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"loading", 3:"loaded"}
-        self.bending_tube_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"loading", 3:"loaded"}
+        self.hoop_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"in_box", 3:"on_table", 4:"loading", 5:"loaded"}
+        self.bending_tube_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"in_box",  3:"on_table", 4:"loading", 5:"loaded"}
         self.upper_tube_state_dic = {}
         self.product_state_dic = {0:"waitng", 1:"placed", -1:"finished"}
 
@@ -161,8 +162,12 @@ class Characters(object):
     def __init__(self, character_list) -> None:
         self.num = len(character_list)
         self.list = character_list
-        self.state_character_dic = {0:"free", 1:"approaching", 2:"waiting_box"}
-        self.task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box", 3:"cutting_machine"}
+        self.state_character_dic = {0:"free", 1:"approaching", 2:"waiting_box", 3:"putting_in_box", 4:"putting_on_table"}
+        self.task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box", 3:"put_hoop_on_table", 4:"put_bending_tube_on_table", 
+                                    5:'hoop_loading_inner', 6:'bending_tube_loading_inner', 7:'hoop_loading_outer', 8: 'bending_tube_loading_outer'}
+        
+        self.task_range = {'hoop_preparing', 'bending_tube_preparing', 'hoop_loading_inner', 'bending_tube_loading_inner', 'hoop_loading_outer', 'bending_tube_loading_outer'}
+
         self.states = [0]*self.num
         self.tasks = [0]*self.num
         self.corresp_agv_idxs = [-1]*self.num
@@ -175,22 +180,37 @@ class Characters(object):
 
         self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
         self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.picking_pose_table_hoop = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.picking_pose_table_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+
+        self.loading_pose_hoop = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.loading_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
 
         self.LOADING_TIME = 5
         self.loading_operation_time_steps = [0 for i in range(len(character_list))]
         return
     
-    def assign_task(self, task):
+    def assign_task(self, high_level_task):
         #todo 
+        if high_level_task not in self.task_range:
+            return -2
         idx = self.find_available_charac()
         if idx == -1:
             return idx
-        if task == 'hoop_preparing':
+        if high_level_task == 'hoop_preparing':
             # idx = self.find_available_charac()
             self.tasks[idx] = 1 
-        elif task == 'bending_tube_preparing':
+        elif high_level_task == 'bending_tube_preparing':
             # idx = self.find_available_charac()
             self.tasks[idx] = 2
+        elif high_level_task == 'hoop_loading_inner':
+            self.tasks[idx] = 5
+        elif high_level_task == 'bending_tube_loading_inner':
+            self.tasks[idx] = 6
+        elif high_level_task == 'hoop_loading_outer':
+            self.tasks[idx] = 7
+        elif high_level_task == 'bending_tube_loading_outer':
+            self.tasks[idx] = 8
         return idx
     
     def find_available_charac(self):
@@ -226,7 +246,8 @@ class Agvs(object):
         self.list = agv_list
         self.num = len(agv_list)
         self.state_dic = {0:"free", 1:"moving_to_box", 2:"carrying_box", 3:"fulling"}
-        self.task_dic = {0:"free", 1:"carry_box_to_hoop", 2:"carry_box_to_bending_tube", 3:"carry_box_to_hoop_table", 4:"carry_box_to_bending_tube_table"}
+        self.task_dic = {0:"free", 1:"carry_box_to_hoop", 2:"carry_box_to_bending_tube", 3:"waiting", 4:"carry_box_to_hoop_table", 5:"carry_box_to_bending_tube_table"}
+        self.task_range = {'hoop_preparing', 'bending_tube_preparing'}
         self.states = [0]*self.num
         self.tasks = [0]*self.num
         self.corresp_charac_idxs = [-1]*self.num
@@ -239,17 +260,21 @@ class Agvs(object):
 
         self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
         self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.picking_pose_table_hoop = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.picking_pose_table_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
         return
     
-    def assign_task(self, task):
+    def assign_task(self, high_level_task):
         #todo 
+        if high_level_task not in self.task_range:
+            return -2
         idx = self.find_available_agv()
         if idx == -1:
             return idx
-        if task == 'hoop_preparing':
+        if high_level_task == 'hoop_preparing':
             # idx = self.find_available_charac()
             self.tasks[idx] = 1 
-        elif task == 'bending_tube_preparing':
+        elif high_level_task == 'bending_tube_preparing':
             # idx = self.find_available_charac()
             self.tasks[idx] = 2
         return idx
@@ -285,8 +310,9 @@ class TransBoxs(object):
     def __init__(self, box_list) -> None:
         self.list = box_list
         self.num = len(box_list)
-        self.state_dic = {0:"free", 1:"waiting", 2:"moving", 3:"loading", 4:"fulling"}
+        self.state_dic = {0:"free", 1:"waiting", 2:"moving"}
         self.task_dic = {0:"free", 1:"waiting_agv", 2:"moving_with_box"}
+        self.task_range = {'hoop_preparing', 'bending_tube_preparing'}
         self.state_boxs_dic = {}
         self.task_boxs_dic = {}
         self.states = [0]*self.num
@@ -299,16 +325,19 @@ class TransBoxs(object):
 
         self.hoop_idx_list =[[] for i in range(len(box_list))]
         self.bending_tube_idx_list = [[] for i in range(len(box_list))]
-        self.capacity = 4
+        self.CAPACITY = 4
+        self.counts = [0 for i in range(len(box_list))]
 
         return
     
-    def assign_task(self, task):
-        #todo 
+    def assign_task(self, high_level_task):
+        #todo
+        if high_level_task not in self.task_range:
+            return -2
         idx = self.find_available_box()
         if idx == -1:
             return idx
-        if task == 'hoop_preparing' or task == 'bending_tube_preparing':
+        if high_level_task == 'hoop_preparing' or high_level_task == 'bending_tube_preparing':
             # idx = self.find_available_charac()
             self.tasks[idx] = 1 
         return idx
@@ -350,6 +379,8 @@ class TaskManager(object):
 
         return True
 
+    # def task_clearing(self, task):
+    #     if task
     def step(self):
         for task in self.task_in_list:
             if self.task_in_dic[task]['lacking_resource']:
@@ -359,7 +390,12 @@ class TaskManager(object):
                     self.task_in_dic[task]['agv_idx'] = self.agvs.assign_task()
                 if self.task_in_dic[task]['box_idx'] == -1:
                     self.task_in_dic[task]['box_idx'] = self.boxs.assign_task()
-                self.task_in_dic[task]['lacking_resource'] = list(self.task_in_dic.values()).index(-1) >= 0
+                try:
+                    list(self.task_in_dic.values()).index(-1)
+                    self.task_in_dic[task]['lacking_resource'] = True
+                except: 
+                    self.task_in_dic[task]['lacking_resource'] = False
+                
         return 
 
 class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
@@ -705,10 +741,10 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_local_poses()
 
         '''side table state'''
-        self.side_table_state_dic = {0: "empty", 1:"placing", 2:"placed"}
-        self.table_capacity = 4
-        self.num_side_table_hoop = 0
-        self.num_side_table_bending_tube = 0
+        self.side_table_state_dic = {0: "empty", 1:"placed"}
+        # self.table_capacity = 4
+        self.side_table_hoop_set = set()
+        self.side_table_bending_tube_set = set()
         self.state_side_table_hoop = 0
         self.state_side_table_bending_tube = 0
 

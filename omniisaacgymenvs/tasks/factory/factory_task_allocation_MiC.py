@@ -67,7 +67,9 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             is_last_step = self.progress_buf[0] == self.max_episode_length - 1
             #initial pose: self.obj_0_3.get_world_poses() (tensor([[-8.3212,  2.2496,  2.7378]], device='cuda:0'), tensor([[ 0.9977, -0.0665,  0.0074,  0.0064]], device='cuda:0'))
             if not self.materials.done():
+                # self.post_material_step()
                 self.post_task_manager_step()
+                self.post_side_table_step()
                 self.post_conveyor_belt_step()
                 self.post_cutting_machine_step()
                 self.post_grippers_step()
@@ -85,6 +87,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
 
         return self.obs_buf, self.rew_buf, self.reset_buf, self.extras
     
+    # def post_material_step(self):
+
+    #     #hoop 
+    #     if 'hoop_preparing' if self.task_manager.task_in_dic.keys():
+            
+    #         task_info = self.task_manager.task_in_dic['hoop_preparing']
+
+        #do the hoop \ bending tube state == 3
+
     def post_task_manager_step(self):
         #assign task material loading, cutting machine, place product
         if self.state_side_table_hoop == 0 and self.materials.hoop_states.index(1) >= 0:
@@ -93,6 +104,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         if self.state_side_table_bending_tube == 0 and self.materials.bending_tube_states.index(1) >= 0:
             if self.task_manager.assign_task(task = 'bending_tube_preparing'):
                 self.state_side_table_bending_tube == 1
+        if self.station_state_inner_left == 1 and 'hoop_loading_inner' not in self.task_manager.task_in_dic.keys(): #loading
+            self.task_manager.assign_task(task='hoop_loading_inner')
+        if self.station_state_inner_right == 1 and 'bending_tube_loading_inner' not in self.task_manager.task_in_dic.keys(): 
+            self.task_manager.assign_task(task='bending_tube_loading_inner')
+        if self.station_state_outer_left == 1 and 'hoop_loading_outer' not in self.task_manager.task_in_dic.keys(): #loading
+            self.task_manager.assign_task(task='hoop_loading_outer')
+        if self.station_state_outer_right == 1 and 'bending_tube_loading_outer' not in self.task_manager.task_in_dic.keys(): 
+            self.task_manager.assign_task(task='bending_tube_loading_outer')
+
         self.task_manager.step()
         
         for charac_idx in range(0, self.task_manager.characters.num):
@@ -106,7 +126,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         charac : RigidPrimView = self.task_manager.characters.list[idx]
         state = self.task_manager.characters.states[idx]
         task = self.task_manager.characters.tasks[idx]
-        # corresp_agv_idx = self.task_manager.characters.corresp_agvs_idxs[idx] 
+        corresp_agv_idx = self.task_manager.characters.corresp_agv_idxs[idx] 
         corresp_box_idx = self.task_manager.characters.corresp_box_idxs[idx] 
         current_pose = charac.get_world_poses()
         target_position = None
@@ -126,25 +146,99 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 # A = matrix.ExtractRotation().GetAngle()
                 if task == 1:
                     g = self.task_manager.characters.picking_pose_hoop
-                    self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.path_planner(s, g)
                 elif task == 2:
                     g = self.task_manager.characters.picking_pose_bending_tube
-                    self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.path_planner(s, g)
+                elif task == 3:
+                    g = self.task_manager.characters.picking_pose_table_hoop
+                elif task == 4:
+                    g = self.task_manager.characters.picking_pose_table_bending_tube
+                elif task == 5 or task == 7: #hoop_loading_inner
+                    g = self.task_manager.characters.loading_pose_hoop
+                elif task == 6 or task == 8: #bending_tube_loading_inner
+                    g = self.task_manager.characters.loading_pose_bending_tube
+                self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.path_planner(s, g)
                 # self.task_manager.characters.path_idxs[idx] = 0
             target_position, target_orientation, reaching_flag = self.task_manager.characters.step_next_pose(charac_idx = idx)
             target_position, target_orientation = torch.tensor([target_position], device='cuda:0'), torch.tensor([target_orientation], device='cuda:0')
             if reaching_flag:
-                self.task_manager.characters.states[idx] = 2
+                if task in range(5, 9): #loading
+                    self.task_manager.characters.states[idx] = 5
+                else: 
+                    self.task_manager.characters.states[idx] = 2
         elif state == 2: #worker is waiting
-            if corresp_box_idx >= 0 and self.task_manager.boxs.states[corresp_box_idx] == 2:
-                self.task_manager.characters.states[idx] = 3
+            if corresp_box_idx >= 0 and self.task_manager.agvs.states[corresp_agv_idx] == 3:
+                if task in range(1, 3):
+                    self.task_manager.characters.states[idx] = 3 
+                elif task in range(3, 5):
+                    self.task_manager.characters.states[idx] = 4
             target_position, target_orientation = charac.get_world_poses()
-        elif state == 3: #worker is loading
-            if task == 1:
-                if self.task_manager.characters.loading_operation_time_steps[idx] > self.task_manager.characters.LOADING_TIME:
-                    self.task_manager.boxs.hoop_idx_list[idx].append()
-            elif task == 2:
+        elif state == 3: #putting in box 
+            target_position, target_orientation = current_pose
+            if self.task_manager.boxs.counts[corresp_box_idx] >= self.task_manager.boxs.CAPACITY: 
+                self.task_manager.characters.states[idx] = 1
+                if task == 1: #put_hoop_into_box
+                    self.task_manager.characters.tasks[idx] = 3 #put_hoop_on_table
+                    self.task_manager.agvs.tasks[corresp_agv_idx] = 3
+                    self.task_manager.agvs.states[corresp_agv_idx] = 2
+                elif task == 2: #put_bending_into_box
+                    self.task_manager.characters.tasks[idx] = 4 #put_bending_tube_on_table
+                    self.task_manager.agvs.tasks[corresp_agv_idx] = 4
+                    self.task_manager.agvs.states[corresp_agv_idx] = 2
+            if self.task_manager.characters.loading_operation_time_steps[idx] > self.task_manager.characters.LOADING_TIME:
+                self.task_manager.characters.loading_operation_time_steps[idx] = 0
+                self.task_manager.boxs.counts[corresp_box_idx] += 1
+                if task == 1:
+                    hoop_idx = self.materials.hoop_states.index(1)
+                    self.materials.hoop_states[hoop_idx] = 2
+                    self.task_manager.boxs.hoop_idx_list[corresp_box_idx].append(hoop_idx)
+                elif task == 2:
+                    bending_tube_idx = self.materials.bending_tube_states.index(1)
+                    self.materials.bending_tube_states[bending_tube_idx] = 2
+                    self.task_manager.boxs.bending_tube_idx_list[corresp_box_idx].append(bending_tube_idx)
+            else:
+                self.task_manager.characters.loading_operation_time_steps[idx] += 1
+        elif state == 4: #putting on table
+            target_position, target_orientation = current_pose
+            if self.task_manager.boxs.counts[corresp_box_idx] == 0: #finished 
+                self.task_manager.characters.states[idx] = 0
+                self.task_manager.characters.tasks[idx] = 0
 
+                self.task_manager.agvs.tasks[corresp_agv_idx] = 0
+                self.task_manager.agvs.states[corresp_agv_idx] = 0
+
+                self.task_manager.boxs.tasks[corresp_box_idx] = 0
+                self.task_manager.boxs.states[corresp_box_idx] = 0
+
+            elif self.task_manager.characters.loading_operation_time_steps[idx] > self.task_manager.characters.LOADING_TIME:
+                self.task_manager.characters.loading_operation_time_steps[idx] = 0
+                self.task_manager.boxs.counts[corresp_box_idx] -= 1
+                if task == 3:
+                    hoop_idx = self.task_manager.boxs.hoop_idx_list[corresp_box_idx].pop()
+                    self.materials.hoop_states[hoop_idx] = 3
+                    self.side_table_hoop_set.add[hoop_idx]
+                elif task == 4:
+                    bending_tube_idx = self.task_manager.boxs.bending_tube_idx_list[corresp_box_idx].pop()
+                    self.materials.bending_tube_states[bending_tube_idx] = 3
+                    self.side_table_bending_tube_set.add[bending_tube_idx]
+
+            else:
+                self.task_manager.characters.loading_operation_time_steps[idx] += 1
+        
+        elif state == 5: #loading 
+            target_position, target_orientation = current_pose
+            if self.task_manager.characters.loading_operation_time_steps[idx] > self.task_manager.characters.LOADING_TIME:
+                self.task_manager.characters.loading_operation_time_steps[idx] = 0
+                if task == 3:
+                    hoop_idx = self.task_manager.boxs.hoop_idx_list[corresp_box_idx].pop()
+                    self.materials.hoop_states[hoop_idx] = 3
+                    self.side_table_hoop_set.add[hoop_idx]
+                elif task == 4:
+                    bending_tube_idx = self.task_manager.boxs.bending_tube_idx_list[corresp_box_idx].pop()
+                    self.materials.bending_tube_states[bending_tube_idx] = 3
+                    self.side_table_bending_tube_set.add[bending_tube_idx]
+            else:
+                self.task_manager.characters.loading_operation_time_steps[idx] += 1
+            
 
         charac.set_world_poses(positions=target_position, orientations=target_orientation)    
 
@@ -188,18 +282,22 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 euler_angles = quaternion.quaternionToEulerAngles(orientation.numpy())
                 s = [position[0], position[1], euler_angles[2]]
                 if task == 1:
-                    g = self.task_manager.agvs.picking_pose_hoop
-                    self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s, g)
+                    g = self.task_manager.agvs.picking_pose_hoop  
                 elif task == 2:
                     g = self.task_manager.agvs.picking_pose_bending_tube
-                    self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s, g)
-                self.task_manager.agvs.path_idxs[idx] = 0
+                elif task == 3:
+                    g = self.task_manager.agvs.picking_pose_table_hoop
+                elif task == 4:
+                    g = self.task_manager.agvs.picking_pose_table_bending_tube
+                self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s, g)
+                # self.task_manager.agvs.path_idxs[idx] = 0
             target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
             target_position, target_orientation = torch.tensor([target_position], device='cuda:0'), torch.tensor([target_orientation], device='cuda:0')
-                if reaching_flag:
-                    self.task_manager.agvs.states[idx] = 3
-        elif state == 3: #finished carrying box to the target position and waiting for worker loading task
-            if 
+            if reaching_flag:
+                self.task_manager.agvs.states[idx] = 3
+        elif state == 3: #finished carrying box to the target position and waiting 
+            target_position, target_orientation = current_pose
+
         agv.set_world_poses(positions=target_position, orientations=target_orientation)  
 
         return 
@@ -223,13 +321,23 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.task_manager.boxs.states[idx] = 2
         elif state == 1: #wating for agv
             target_position, target_orientation = current_pose
-            if corresp_agv_idx >= 0 and task == 2:
+            if corresp_agv_idx >= 0 and task == 2: #moving_with_box
                 self.task_manager.boxs.states[idx] = 2
-        elif state == 2: #moving with box 
+        elif state == 2: #moving
             target_position, target_orientation = self.task_manager.agvs.list[corresp_agv_idx]
         
         box.set_world_poses(positions=target_position, orientations=target_orientation)
         return
+
+
+    def post_side_table_step(self):
+        if len(self.side_table_hoop_set) > 0:
+            for idx in self.side_table_hoop_set:
+                self.materials.hoop_list[idx].set_world_poses()
+        
+        if len(self.side_table_bending_tube_set) > 0:
+            for idx in self.side_table_bending_tube_set:
+                self.materials.bending_tube_list[idx].set_world_poses()
 
     def path_planner(self, s, g):
         xyResolution = 5
@@ -719,15 +827,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if len(self.proc_groups_inner_list) > 0:
                 raw_cube_index = self.proc_groups_inner_list[0]
                 raw_hoop_index = self.process_groups_dict[raw_cube_index]["hoop_index"]
-                if self.materials.hoop_states[raw_hoop_index] == 1:
+                if self.materials.hoop_states[raw_hoop_index] == 3: #on table
                     self.station_state_inner_left = 1
                     self.materials.inner_hoop_processing_index = raw_hoop_index
-                    self.materials.hoop_states[raw_hoop_index] = 2
+                    self.materials.hoop_states[raw_hoop_index] = 4
         elif self.station_state_inner_left == 1: #loading
             # inner_revolution_target = 1.5
             if self.put_hoop_on_weld_station_inner(self.materials.inner_hoop_processing_index):
                 self.station_state_inner_left = 2
-                self.materials.hoop_states[self.materials.inner_hoop_processing_index] = 3
+                self.materials.hoop_states[self.materials.inner_hoop_processing_index] = 5
         elif self.station_state_inner_left == 2: #rotating
             #the station start to rotating 
             inner_revolution_target = 0.0
@@ -850,15 +958,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if len(self.proc_groups_inner_list) > 0:
                 raw_cube_index = self.proc_groups_inner_list[0]
                 raw_bending_tube_index = self.process_groups_dict[raw_cube_index]["bending_tube_index"]
-                if self.materials.bending_tube_states[raw_bending_tube_index] == 1: #0:"wait"
+                if self.materials.bending_tube_states[raw_bending_tube_index] == 3: #0:"wait"
                     self.station_state_inner_right = 1
                     self.materials.inner_bending_tube_processing_index = raw_bending_tube_index      
-                    self.materials.bending_tube_states[raw_bending_tube_index] = 2    
+                    self.materials.bending_tube_states[raw_bending_tube_index] = 4   
         elif self.station_state_inner_right == 1: #placing
             #place bending tube on the station right 
             if self.put_bending_tube_on_weld_station_inner(self.materials.inner_bending_tube_processing_index):
                 self.station_state_inner_right = 2
-                self.materials.bending_tube_states[self.materials.inner_bending_tube_processing_index] = 3
+                self.materials.bending_tube_states[self.materials.inner_bending_tube_processing_index] = 5
         elif self.station_state_inner_right == 2: #placed
             "waiting for the middle part and welding left task finished"
         elif self.station_state_inner_right == 3: #moving
@@ -1126,15 +1234,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if len(self.proc_groups_outer_list) > 0:
                 raw_cube_index = self.proc_groups_outer_list[0]
                 raw_hoop_index = self.process_groups_dict[raw_cube_index]["hoop_index"]
-                if self.materials.hoop_states[raw_hoop_index] == 1:
+                if self.materials.hoop_states[raw_hoop_index] == 3:
                     self.station_state_outer_left = 1
                     self.materials.outer_hoop_processing_index = raw_hoop_index
-                    self.materials.hoop_states[raw_hoop_index] = 2
+                    self.materials.hoop_states[raw_hoop_index] = 4
         elif self.station_state_outer_left == 1: #loading
             # outer_revolution_target = 1.5
             if self.put_hoop_on_weld_station_outer(self.materials.outer_hoop_processing_index):
                 self.station_state_outer_left = 2
-                self.materials.hoop_states[self.materials.outer_hoop_processing_index] = 3
+                self.materials.hoop_states[self.materials.outer_hoop_processing_index] = 5
         elif self.station_state_outer_left == 2: #rotating
             #the station start to rotating 
             outer_revolution_target = 0.0
@@ -1257,15 +1365,15 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if len(self.proc_groups_outer_list) > 0:
                 raw_cube_index = self.proc_groups_outer_list[0]
                 raw_bending_tube_index = self.process_groups_dict[raw_cube_index]["bending_tube_index"]
-                if self.materials.bending_tube_states[raw_bending_tube_index] == 1: #0:"wait"
+                if self.materials.bending_tube_states[raw_bending_tube_index] == 3: #0:"wait"
                     self.station_state_outer_right = 1
                     self.materials.outer_bending_tube_processing_index = raw_bending_tube_index      
-                    self.materials.bending_tube_states[raw_bending_tube_index] = 2  
+                    self.materials.bending_tube_states[raw_bending_tube_index] = 4
         elif self.station_state_outer_right == 1: #placing
             #place bending tube on the station right 
             if self.put_bending_tube_on_weld_station_outer(self.materials.outer_bending_tube_processing_index):
                 self.station_state_outer_right = 2
-                self.materials.bending_tube_states[self.materials.outer_bending_tube_processing_index] = 3
+                self.materials.bending_tube_states[self.materials.outer_bending_tube_processing_index] = 5
         elif self.station_state_outer_right == 2: #placed
             "waiting for the middle part and welding left task finished"
         elif self.station_state_outer_right == 3: #moving
