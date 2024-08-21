@@ -179,17 +179,17 @@ class Characters(object):
         self.yaws = [[] for i in range(len(character_list))]
         self.path_idxs = [0 for i in range(len(character_list))]
 
-        self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
-        self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
-        self.picking_pose_table_hoop = [-0.09067, 13.12021, np.deg2rad(0)]
-        self.picking_pose_table_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.picking_pose_hoop = [1.28376, 6.48821, np.deg2rad(180)] #
+        self.picking_pose_bending_tube = [1.28376, 13.12021, np.deg2rad(0)]
+        self.picking_pose_table_hoop = [-12.26318, 4.72131, np.deg2rad(0)]
+        self.picking_pose_table_bending_tube = [-33.18544, 4.75439, np.deg2rad(0)]
 
-        self.loading_pose_hoop = [-0.09067, 13.12021, np.deg2rad(0)]
-        self.loading_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.loading_pose_hoop = [-16.26241, 4.14283, np.deg2rad(0)]
+        self.loading_pose_bending_tube = [-29.06123, 6.3725, np.deg2rad(0)]
 
-        self.cutting_cube_pose = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.cutting_cube_pose = [-22.33392, -3.97061, np.deg2rad(0)]
 
-        self.placing_product_pose = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.placing_product_pose = [-40.47391, 12.91755, np.deg2rad(0)]
         self.PUTTING_TIME = 5
         self.LOADING_TIME = 10
         self.loading_operation_time_steps = [0 for i in range(len(character_list))]

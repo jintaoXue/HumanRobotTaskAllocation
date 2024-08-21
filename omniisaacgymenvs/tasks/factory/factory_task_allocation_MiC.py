@@ -331,11 +331,12 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
             target_position, target_orientation = torch.tensor([target_position], device='cuda:0'), torch.tensor([target_orientation], device='cuda:0')
             if reaching_flag:
-                self.task_manager.agvs.states[idx] = 3
                 if task == 5: #reset agvs state
                     self.task_manager.agvs.reset(idx)
                     self.task_manager.boxs.states[corresp_box_idx] = 1 #waiting
                     self.task_manager.boxs.tasks[corresp_box_idx] = 3 #collect products
+                else:
+                    self.task_manager.agvs.states[idx] = 3
         elif state == 3: #finished carrying box to the target position and waiting 
             target_position, target_orientation = current_pose
 
@@ -365,10 +366,11 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if corresp_agv_idx >= 0 and task == 2: #moving_with_box
                 self.task_manager.boxs.states[idx] = 2
             elif task == 3: #collect_product
-                ''
+                '''collecting product and waiting for task manager to end the collecting task'''
         elif state == 2: #moving
+            #todo
             target_position, target_orientation = self.task_manager.agvs.list[corresp_agv_idx]
-        
+            
         box.set_world_poses(positions=target_position, orientations=target_orientation)
         return
 
@@ -550,7 +552,11 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             #gripper is free and empty todo
             self.gripper_inner_task = 0
             # stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle #only state == 0 means free, -1 and >= 0 means full
-            if (pick_up_place_cube_index>=0): #pick cut cube by cutting machine
+            if self.station_state_inner_middle == 9 and 'collect_product' in self.task_manager.task_in_dic and self.task_manager.boxs.product_collecting_idx >= 0: #welded product
+                self.gripper_inner_task = 4
+            elif self.station_state_outer_middle == 9 and  'collect_product' in self.task_manager.task_in_dic and self.task_manager.boxs.product_collecting_idx >= 0:
+                self.gripper_inner_task = 5
+            elif (pick_up_place_cube_index>=0): #pick cut cube by cutting machine
                 if self.process_groups_dict[pick_up_place_cube_index]['station'] == 'inner':
                     if self.station_state_inner_middle == 1: #station is waiting
                         self.gripper_inner_task = 1
@@ -559,6 +565,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     if self.station_state_outer_middle == 1 and self.gripper_outer_state == 0: #station is wating
                         self.gripper_inner_task = 1
                         self.gripper_inner_state = 1
+            
             next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], inner_initial_pose[0], 'reset')
         elif self.gripper_inner_state == 1:
             #gripper is picking
@@ -1163,7 +1170,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.station_state_inner_middle = 9 #welded_upper
                 self.station_state_inner_left = -1
                 self.welder_inner_task =0
-                self.gripper_inner_task = 4
+                # self.gripper_inner_task = 4
                 self.gripper_inner_state = 1
                 # cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
                 # upper_tube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/upper_tube_" + "{}".format(self.materials.inner_upper_tube_processing_index))
@@ -1533,7 +1540,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.station_state_outer_middle = 9 #welded_upper
                 self.station_state_outer_left = -1
                 self.welder_outer_task =0
-                self.gripper_inner_task = 5 
+                # self.gripper_inner_task = 5 
                 self.gripper_inner_state = 1
                 '''set the upper tube under the ground'''
                 position = torch.tensor([[0,   0,   -100]], device='cuda:0')
