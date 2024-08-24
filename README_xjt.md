@@ -71,3 +71,9 @@ y-30 40
 
 # 8.13
 https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+
+# 8.24
+path planner需要继续优化
+
+cutting cube 的操作用worker去做，可以尝试判断一下位姿关系，选择靠近cutting machine的worker
+worker 0 要呆在左边

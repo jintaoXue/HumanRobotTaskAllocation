@@ -10,7 +10,8 @@ from . import reeds_shepp as rsCurve
 
 class Car:
     scale = 5
-    maxSteerAngle = 0.6
+    # maxSteerAngle = 0.6
+    maxSteerAngle = 1.0
     steerPresion = 10
     wheelBase = 3.5/scale
     axleToFront = 4.5/scale
@@ -539,12 +540,12 @@ def drawCar(x, y, yaw, color='black'):
     car += np.array([[x], [y]])
     plt.plot(car[0, :], car[1, :], color)
 
-def map_png():
+def map_png(xyResolution):
     # from scipy import misc
     # raw resolution is 1m : 20
     # change resolution to 1m : 5
     raw_resolution = 20
-    target_resolution = 5
+    target_resolution = xyResolution
     scale = int(raw_resolution/target_resolution)
     path = "/home/xue/work/Dataset/3D_model/occupancy_map.png"
     img = plt.imread(path)
@@ -584,7 +585,7 @@ def main():
     # g = [400, 200, np.deg2rad(90)]
     # Get Obstacle Map
     # obstacleX, obstacleY = map()
-    obstacleX, obstacleY = map_png()
+    obstacleX, obstacleY = map_png(xyResolution)
     # Calculate map Paramaters
     mapParameters = calculateMapParameters(obstacleX, obstacleY, xyResolution, np.deg2rad(15.0))
 

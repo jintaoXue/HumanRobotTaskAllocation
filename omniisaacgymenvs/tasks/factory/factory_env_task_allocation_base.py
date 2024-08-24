@@ -60,6 +60,9 @@ from omni.isaac.core.articulations import ArticulationView
 
 from omni.usd import get_world_transform_matrix, get_local_transform_matrix
 from omniisaacgymenvs.utils.geometry import quaternion  
+from omniisaacgymenvs.utils.hybridAstar import hybridAStar 
+from omni.isaac.core.utils.prims import set_prim_visibility
+
 
 class Materials(object):
 
@@ -74,8 +77,8 @@ class Materials(object):
         self.cube_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"conveying", 3:"conveyed", 4:"cutting", 5:"cut_done", 6:"pick_up_place_cut", 
                                    7:"placed_station_inner", 8:"placed_station_outer", 9:"welding_left", 10:"welding_right", 11:"welding_upper",
                                    12:"process_done", 13:"pick_up_place_product"}
-        self.hoop_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"in_box", 3:"on_table", 4:"loading", 5:"loaded"}
-        self.bending_tube_state_dic = {-1:"done", 0:"wait", 1:"in_list", 2:"in_box",  3:"on_table", 4:"loading", 5:"loaded"}
+        self.hoop_state_dic = {-1:"done", 0:"wait", 1:"in_box", 2:"on_table", 3:"in_list", 4:"loading", 5:"loaded"}
+        self.bending_tube_state_dic = {-1:"done", 0:"wait", 1:"in_box",  2:"on_table", 3:"in_list", 4:"loading", 5:"loaded"}
         self.upper_tube_state_dic = {}
         self.product_state_dic = {0:"waitng", 1:'collected', 2:"placed", -1:"finished"}
 
@@ -112,6 +115,24 @@ class Materials(object):
         self.initial_hoop_pose = None
         self.initial_bending_tube_pose = None
 
+
+        position = [[[-14.44042, 4.77828, 0.6]], [[-13.78823, 4.77828, 0.6]], [[-14.44042, 5.59765, 0.6]]]
+        orientation = [[1 ,0 ,0, 0]]
+        self.position_depot_hoop, self.orientation_depot_hoop = torch.tensor(position, dtype=torch.float32), torch.tensor(orientation, dtype=torch.float32)
+        
+        position = [[[-31.64901, 4.40483, 2.1]], [[-30.80189, 4.40483, 2.1]], [[-31.64901, 5.31513, 2.1]]]
+        orientation = [[-1.6081e-16, -6.1232e-17,  1.0000e+00, -6.1232e-17]]
+        self.position_depot_bending_tube, self.orientation_depot_bending_tube = torch.tensor(position, dtype=torch.float32), torch.tensor(orientation, dtype=torch.float32)
+
+        position = [[[-27.18078, 11.10059, 0]], [[-27.18078, 12.3697, 0]], [[-27.18078, 13.25518, 0]]]
+        orientation = [[1 ,0 ,0, 0]]
+        self.position_depot_product, self.orientation_depot_product = torch.tensor(position, dtype=torch.float32), torch.tensor(orientation, dtype=torch.float32)
+
+        in_box_offsets = [[[0.5,0.5, 0.5]], [[-0.5,0.5, 0.5]], [[0.5,-0.5, 0.5]]]
+        self.in_box_offsets = torch.tensor(in_box_offsets, dtype=torch.float32) 
+
+
+
     def get_world_poses(self, list):
         poses = []
         for obj in list:
@@ -141,9 +162,9 @@ class Materials(object):
         # return self.upper_tube_states.index(0)
     
     def find_next_raw_hoop_index(self):
-        # index 
+        # index 2 is on table
         try:
-            return self.hoop_states.index(0)
+            return self.hoop_states.index(2)
         except:
             return -1
         # return self.hoop_states.index(0)
@@ -151,10 +172,9 @@ class Materials(object):
     def find_next_raw_bending_tube_index(self):
         # index 
         try:
-            return self.bending_tube_states.index(0)
+            return self.bending_tube_states.index(2)
         except:
             return -1
-        # return self.bending_tube_states.index(0)
 
 
 class Characters(object):
@@ -163,43 +183,48 @@ class Characters(object):
         self.num = len(character_list)
         self.list = character_list
         self.state_character_dic = {0:"free", 1:"approaching", 2:"waiting_box", 3:"putting_in_box", 4:"putting_on_table"}
-        self.sub_task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_into_box", 3:"put_hoop_on_table", 4:"put_bending_tube_on_table", 
+        self.sub_task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_tube_into_box", 3:"put_hoop_on_table", 4:"put_bending_tube_on_table", 
                                     5:'hoop_loading_inner', 6:'bending_tube_loading_inner', 7:'hoop_loading_outer', 8: 'bending_tube_loading_outer', 9: 'cutting_cube', 10:'placing_product'}
         
+        self.low2high_level_task_dic = {"put_hoop_into_box":"hoop_preparing", "put_bending_tube_into_box":'bending_tube_preparing', "put_hoop_on_table":'hoop_preparing', 
+                                            "put_bending_tube_on_table":'bending_tube_preparing', 
+                                    'hoop_loading_inner':'hoop_loading_inner', 'bending_tube_loading_inner':'bending_tube_loading_inner', 'hoop_loading_outer':'hoop_loading_outer', 
+                                    'bending_tube_loading_outer': 'bending_tube_loading_outer', 'cutting_cube': 'cutting_cube', 'placing_product':'placing_product'}
+
         self.task_range = {'hoop_preparing', 'bending_tube_preparing', 'hoop_loading_inner', 'bending_tube_loading_inner', 'hoop_loading_outer', 'bending_tube_loading_outer', "cutting_cube", 
                            'placing_product'}
 
         self.states = [0]*self.num
         self.tasks = [0]*self.num
-        self.corresp_agv_idxs = [-1]*self.num
-        self.corresp_box_idxs = [-1]*self.num
+        # self.corresp_agv_idxs = [-1]*self.num
+        # self.corresp_box_idxs = [-1]*self.num
         # self.corresp_agvs_idxs = [-1]*self.num
         self.x_paths = [[] for i in range(len(character_list))]
         self.y_paths = [[] for i in range(len(character_list))]
         self.yaws = [[] for i in range(len(character_list))]
         self.path_idxs = [0 for i in range(len(character_list))]
 
-        self.picking_pose_hoop = [1.28376, 6.48821, np.deg2rad(180)] #
-        self.picking_pose_bending_tube = [1.28376, 13.12021, np.deg2rad(0)]
+        self.picking_pose_hoop = [1.28376, 6.48821, np.deg2rad(0)] 
+        self.picking_pose_bending_tube = [1.28376, 13.12021, np.deg2rad(0)] 
         self.picking_pose_table_hoop = [-12.26318, 4.72131, np.deg2rad(0)]
-        self.picking_pose_table_bending_tube = [-33.18544, 4.75439, np.deg2rad(0)]
+        self.picking_pose_table_bending_tube = [-32, 8.0, np.deg2rad(0)]
 
         self.loading_pose_hoop = [-16.26241, 4.14283, np.deg2rad(0)]
         self.loading_pose_bending_tube = [-29.06123, 6.3725, np.deg2rad(0)]
 
-        self.cutting_cube_pose = [-22.33392, -3.97061, np.deg2rad(0)]
+        self.cutting_cube_pose = [-29.83212, -1.54882, np.deg2rad(0)]
 
         self.placing_product_pose = [-40.47391, 12.91755, np.deg2rad(0)]
         self.PUTTING_TIME = 5
-        self.LOADING_TIME = 10
+        self.LOADING_TIME = 5
         self.loading_operation_time_steps = [0 for i in range(len(character_list))]
         return
     
     def reset(self, idx):
+        if idx < 0 :
+            return
         self.states[idx] = 0
         self.tasks[idx] = 0
-        self.corresp_agv_idxs[idx] = -1
-        self.corresp_box_idxs[idx] = -1
 
     def assign_task(self, high_level_task):
         #todo 
@@ -236,14 +261,16 @@ class Characters(object):
 
     def step_next_pose(self, charac_idx = 0):
         reaching_flag = False
+        #skip the initial pose
         self.path_idxs[charac_idx] += 1
         path_idx = self.path_idxs[charac_idx]
-        if path_idx == len(self.x_paths[charac_idx] - 1):
-            reaching_flag = True
+        if path_idx == (len(self.x_paths[charac_idx]) - 1):
             self.reset_path(charac_idx)
-        
-        position = [self.x_paths[charac_idx][path_idx], self.y_paths[charac_idx][path_idx], 0]
-        euler_angles = [0,0, self.yaws[charac_idx][path_idx]]
+            return None, None, True
+        else:
+            position = [self.x_paths[charac_idx][path_idx], self.y_paths[charac_idx][path_idx], 0]
+            euler_angles = [0,0, self.yaws[charac_idx][path_idx]]
+
         orientation = quaternion.eulerAnglesToQuaternion(euler_angles)
 
         return position, orientation, reaching_flag
@@ -254,6 +281,12 @@ class Characters(object):
         self.yaws[charac_idx] = []
         self.path_idxs[charac_idx] = 0
 
+    def low2high_level_task_mapping(self, task):
+        task = self.sub_task_character_dic[task]
+        if task in self.low2high_level_task_dic.keys():
+            return self.low2high_level_task_dic[task]
+        else: return -1
+
 
 class Agvs(object):
 
@@ -263,31 +296,32 @@ class Agvs(object):
         self.state_dic = {0:"free", 1:"moving_to_box", 2:"carrying_box", 3:"waiting"}
         self.sub_task_dic = {0:"free", 1:"carry_box_to_hoop", 2:"carry_box_to_bending_tube", 3:"carry_box_to_hoop_table", 4:"carry_box_to_bending_tube_table", 5:'collect_product', 6:'placing_product'}
         self.task_range = {'hoop_preparing', 'bending_tube_preparing', 'collect_product','placing_product'}
+        self.low2high_level_task_dic =  {"carry_box_to_hoop":'hoop_preparing', "carry_box_to_bending_tube":'bending_tube_preparing', "carry_box_to_hoop_table":'hoop_preparing', 
+                                         "carry_box_to_bending_tube_table":'bending_tube_preparing', 'collect_product':'collect_product', 'placing_product':'placing_product'}
 
         self.states = [0]*self.num
         self.tasks = [0]*self.num
-        self.corresp_charac_idxs = [-1]*self.num
-        self.corresp_box_idxs = [-1]*self.num
+        # self.corresp_charac_idxs = [-1]*self.num
+        # self.corresp_box_idxs = [-1]*self.num
 
         self.x_paths = [[] for i in range(len(agv_list))]
         self.y_paths = [[] for i in range(len(agv_list))]
         self.yaws = [[] for i in range(len(agv_list))]
         self.path_idxs = [0 for i in range(len(agv_list))]
 
-        self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
-        self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
-        self.picking_pose_table_hoop = [-0.09067, 13.12021, np.deg2rad(0)]
-        self.picking_pose_table_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
-
-        self.collecting_product_pose = [-0.09067, 13.12021, np.deg2rad(0)]
-        self.placing_product_pose = [-0.09067, 13.12021, np.deg2rad(0)]
+        self.picking_pose_hoop = [-0.654, 8.0171, np.deg2rad(0)]  #
+        self.picking_pose_bending_tube = [-0.654, 11.62488, np.deg2rad(0)]
+        self.picking_pose_table_hoop = [-11.69736, 5.71486, np.deg2rad(0)]
+        self.picking_pose_table_bending_tube = [-33.55065, 5.71486, np.deg2rad(-90)] 
+        self.collecting_product_pose = [-21.76757, 10.78427, np.deg2rad(0)]
+        self.placing_product_pose = [-38.54638, 12.40097, np.deg2rad(0)]
         return
     
     def reset(self, idx):
+        if idx < 0 :
+            return
         self.tasks[idx] = 0
         self.states[idx] = 0
-        self.corresp_charac_idxs[idx] = -1
-        self.corresp_box_idxs[idx] = -1
 
     def assign_task(self, high_level_task):
         #todo 
@@ -303,9 +337,9 @@ class Agvs(object):
             # idx = self.find_available_charac()
             self.tasks[idx] = 2
         elif high_level_task == 'collect_product':
-            self.tasks[idx] = 6
+            self.tasks[idx] = 5
         elif high_level_task == 'placing_product':
-            self.tasks[idx] = 7 
+            self.tasks[idx] = 6 
         return idx
     
     def find_available_agv(self):
@@ -314,16 +348,26 @@ class Agvs(object):
         except: 
             return -1
     
-    def step_next_pose(self, agv_idx = 0):
+    def step_next_pose(self, agv_idx):
         reaching_flag = False
+        #skip the initial pose
+        # if len(self.x_paths[agv_idx]) == 0:
+        #     position = [current_pose[0], current_pose[1], 0]
+        #     euler_angles = [0,0, current_pose[2]]
+        #     return position, quaternion.eulerAnglesToQuaternion(euler_angles), True
+
         self.path_idxs[agv_idx] += 1
         path_idx = self.path_idxs[agv_idx]
-        if path_idx == len(self.x_paths[agv_idx] - 1):
+        # if agv_idx == 0:
+        #     a = 1
+        if path_idx == (len(self.x_paths[agv_idx]) - 1):
             reaching_flag = True
-            self.reset_path(agv_idx)
-        
-        position = [self.x_paths[agv_idx][path_idx], self.y_paths[agv_idx][path_idx], 0]
-        euler_angles = [0,0, self.yaws[agv_idx][path_idx]]
+            position = [self.x_paths[agv_idx][-1], self.y_paths[agv_idx][-1], 0]
+            euler_angles = [0,0, self.yaws[agv_idx][-1]]
+        else:
+            position = [self.x_paths[agv_idx][path_idx], self.y_paths[agv_idx][path_idx], 0]
+            euler_angles = [0,0, self.yaws[agv_idx][path_idx]]
+
         orientation = quaternion.eulerAnglesToQuaternion(euler_angles)
         return position, orientation, reaching_flag
     
@@ -332,6 +376,13 @@ class Agvs(object):
         self.y_paths[agv_idx] = []
         self.yaws[agv_idx] = []
         self.path_idxs[agv_idx] = 0
+    
+    def low2high_level_task_mapping(self, task):
+        task = self.sub_task_dic[task]
+        if task in self.low2high_level_task_dic.keys():
+            return self.low2high_level_task_dic[task]
+        else: return -1
+
 
 
 class TransBoxs(object):
@@ -345,14 +396,15 @@ class TransBoxs(object):
 
         self.states = [0]*self.num
         self.tasks = [0]*self.num
-        self.corresp_agv_idxs = [-1]*self.num
-        self.corresp_charac_idxs = [-1]*self.num
+        self.high_level_tasks = ['']*self.num
+        # self.corresp_agv_idxs = [-1]*self.num
+        # self.corresp_charac_idxs = [-1]*self.num
 
-        self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
-        self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
+        # self.picking_pose_hoop = [-0.09067, 6.48821, np.deg2rad(180)]
+        # self.picking_pose_bending_tube = [-0.09067, 13.12021, np.deg2rad(0)]
 
         self.hoop_idx_list =[[] for i in range(len(box_list))]
-        self.bending_tube_idx_list = [[] for i in range(len(box_list))]
+        self.bending_tube_idx_sets = [set() for i in range(len(box_list))]
         self.product_idx_list = [[] for i in range(len(box_list))]
         self.CAPACITY = 4
         self.counts = [0 for i in range(len(box_list))]
@@ -362,11 +414,13 @@ class TransBoxs(object):
         return
     
     def reset(self, idx):
-
+        if idx < 0 :
+            return
         self.tasks[idx] = 0
         self.states[idx] = 0
-        self.corresp_charac_idxs[idx] = -1
-        self.corresp_agv_idxs[idx] = -1
+        self.high_level_tasks[idx] = ''
+        # self.corresp_charac_idxs[idx] = -1
+        # self.corresp_agv_idxs[idx] = -1
 
     def assign_task(self, high_level_task):
         #todo
@@ -385,7 +439,7 @@ class TransBoxs(object):
             # idx = self.find_available_charac()
         if high_level_task == 'collect_product':
             self.product_collecting_idx = idx
-            
+        self.high_level_tasks[idx] = high_level_task
         self.tasks[idx] = 1 
         return idx
     
@@ -404,6 +458,7 @@ class TransBoxs(object):
         
     def is_full_products(self):
         return self.find_full_products_box_idx() != -1
+    
 
 
 class TaskManager(object):
@@ -411,8 +466,8 @@ class TaskManager(object):
         self.characters = Characters(character_list=character_list)
         self.agvs = Agvs(agv_list = agv_list)
         self.boxs = TransBoxs(box_list=box_list)
-        self.task_set =  {'hoop_preparing', 'bending_tube_preparing', 'hoop_loading_inner', 'bending_tube_loading_inner', 'hoop_loading_outer', 
-                          'bending_tube_loading_outer', 'cutting_cube', 'collect_product', 'placing_product'}
+        self.task_dic =  {0: 'hoop_preparing', 1:'bending_tube_preparing', 2:'hoop_loading_inner', 3:'bending_tube_loading_inner', 4:'hoop_loading_outer', 
+                          5:'bending_tube_loading_outer', 6:'cutting_cube', 7:'collect_product', 8:'placing_product'}
         self.task_in_set = set()
         self.task_in_dic = {}
         return
@@ -422,18 +477,12 @@ class TaskManager(object):
         charac_idx = self.characters.assign_task(task)
         agv_idx = self.agvs.assign_task(task)
         box_idx = self.boxs.assign_task(task)
+        lacking_resource = False
         if charac_idx == -1 or agv_idx == -1 or box_idx == -1:
             lacking_resource = True            
 
         self.task_in_set.add(task)
         self.task_in_dic[task] = {'charac_idx': charac_idx, 'agv_idx': agv_idx, 'box_idx': box_idx, 'lacking_resource': lacking_resource}
-
-        self.characters.corresp_agv_idxs[charac_idx] = agv_idx
-        self.characters.corresp_box_idxs[charac_idx] = box_idx
-        self.agvs.corresp_charac_idxs[agv_idx] = charac_idx
-        self.agvs.corresp_box_idxs[agv_idx] = box_idx
-        self.boxs.corresp_charac_idxs[box_idx] = charac_idx
-        self.boxs.corresp_agv_idxs[box_idx] = agv_idx
 
         return True
 
@@ -453,18 +502,23 @@ class TaskManager(object):
         for task in self.task_in_set:
             if self.task_in_dic[task]['lacking_resource']:
                 if self.task_in_dic[task]['charac_idx'] == -1:
-                    self.task_in_dic[task]['charac_idx'] = self.characters.assign_task()
+                    self.task_in_dic[task]['charac_idx'] = self.characters.assign_task(task)
                 if self.task_in_dic[task]['agv_idx'] == -1:
-                    self.task_in_dic[task]['agv_idx'] = self.agvs.assign_task()
+                    self.task_in_dic[task]['agv_idx'] = self.agvs.assign_task(task)
                 if self.task_in_dic[task]['box_idx'] == -1:
-                    self.task_in_dic[task]['box_idx'] = self.boxs.assign_task()
+                    self.task_in_dic[task]['box_idx'] = self.boxs.assign_task(task)
                 try:
-                    list(self.task_in_dic.values()).index(-1)
+                    list(self.task_in_dic[task].values()).index(-1)
                     self.task_in_dic[task]['lacking_resource'] = True
                 except: 
                     self.task_in_dic[task]['lacking_resource'] = False
                 
         return 
+
+    def corresp_charac_agv_box_idx(self, task):
+        if task not in self.task_in_dic.keys():
+            return -1, -1, -1
+        return self.task_in_dic[task]['charac_idx'], self.task_in_dic[task]['agv_idx'], self.task_in_dic[task]['box_idx']
     
 
 class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
@@ -526,8 +580,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # import omni.anim.graph.core as ag
         # self.character = ag.get_character(str(prim_path))
 
-
-        self._stage = get_current_stage()
+        self._stage = get_current_stage()    
         # self.create_nut_bolt_material()
         RLTask.set_up_scene(self, scene, replicate_physics=False)
         self._import_env_assets(add_to_stage=True)
@@ -538,7 +591,11 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
 
         #debug
         stage_utils.print_stage_prim_paths()
-        
+                
+        for i in range(0, self.num_envs):
+            ground_prim = self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj/GroundPlane")
+            set_prim_visibility(prim=ground_prim, visible=False)
+
         # perspective = self._stage.GetPrimAtPath(f"/OmniverseKit_Persp")
         # ConveyorNode_0.GetAttribute('inputs:velocity').Set(100)
         # ConveyorNode_0.GetAttribute('inputs:animateTexture').Set(True)
@@ -735,12 +792,8 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # self.materials_flag_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_cut", 
         # 5:"down", 6:"combine_l", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
         # conveyor
-        self.obj_conveyor_0 = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/ConveyorBelt_A09_0_0").GetAttribute('xformOp:translate')
-        self.obj_conveyor_1 = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/ConveyorBelt_A09_0_2").GetAttribute('xformOp:translate')
-        self.obj_conveyor_2 = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/ConveyorBelt_A08").GetAttribute('xformOp:translate')
         #0 free 1 working
         self.convey_state = 0
-        self.conveyor_pose_list = [self.obj_conveyor_0.Get(), self.obj_conveyor_1.Get(), self.obj_conveyor_2.Get()]
         #cutting machine
         #to do 
         self.cutting_state_dic = {0:"free", 1:"work", 2:"reseting"}
@@ -810,13 +863,13 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         hoop_world_pose_position, hoop_world_pose_orientation = self.obj_11_station_0_revolution.get_local_poses()
 
         '''side table state'''
-        self.side_table_state_dic = {0: "empty", 1:"placing", 2: "placed"}
+        self.depot_state_dic = {0: "empty", 1:"placing", 2: "placed"}
         # self.table_capacity = 4
-        self.side_table_hoop_set = set()
-        self.side_table_bending_tube_set = set()
-        self.state_side_table_hoop = 0
-        self.state_side_table_bending_tube = 0
-        self.side_table_product_set = set()
+        self.depot_hoop_set = set()
+        self.depot_bending_tube_set = set()
+        self.state_depot_hoop = 0
+        self.state_depot_bending_tube = 0
+        self.depot_product_set = set()
 
         '''for humans workers (characters) and robots (agv+boxs)'''
         self.character_1 = RigidPrimView(
@@ -888,13 +941,10 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # translate = matrix.ExtractTranslation()
         # rotation: Gf.Rotation = matrix.ExtractRotation()
         self.pre_progress_buf = 0
-        # scene.add(self.obj_cube)
-        # scene.add(self.obj_0_2_2)
-        # scene.add(self.frankas)
-        # scene.add(self.frankas._hands)
-        # scene.add(self.frankas._lfingers)
-        # scene.add(self.frankas._rfingers)
-        # scene.add(self.frankas._fingertip_centered)
+        self.cuda_device = torch.device("cuda:0")
+        self.xyResolution = 5
+        self.obstacleX, self.obstacleY = hybridAStar.map_png(self.xyResolution)
+        self.mapParameters = hybridAStar.calculateMapParameters(self.obstacleX, self.obstacleY, self.xyResolution, np.deg2rad(15.0))
         return
     
     def post_next_group_to_be_processed_step(self):
@@ -908,8 +958,8 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         if cube_index<0 or upper_tube_index<0 or hoop_index<0 or bending_tube_index<0:
             return -1, -1, -1, -1
         self.materials.cube_states[cube_index] = 1
-        self.materials.hoop_states[hoop_index] = 1
-        self.materials.bending_tube_states[bending_tube_index] = 1
+        self.materials.hoop_states[hoop_index] = 3
+        self.materials.bending_tube_states[bending_tube_index] = 3
         self.materials.upper_tube_states[upper_tube_index] = 1
         _dict = {'cube_index':cube_index, 'upper_tube_index':upper_tube_index,  'hoop_index':hoop_index, 'bending_tube_index':bending_tube_index}
         if len(self.proc_groups_inner_list)<=len(self.proc_groups_outer_list):
