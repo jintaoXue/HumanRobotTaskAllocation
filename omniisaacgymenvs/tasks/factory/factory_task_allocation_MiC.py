@@ -178,7 +178,9 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.task_manager.characters.states[idx] = 1
             target_position, target_orientation = current_pose
         elif state == 1: #worker is approaching 
+            reaching_flag = False
             if len(self.task_manager.characters.x_paths[idx]) == 0:
+                target_position, target_orientation = current_pose
                 s = world_pose_to_navigation_pose(current_pose)
                 # matrix = Gf.Matrix4d()
                 # orientation = current_pose[1][0].cpu()
@@ -192,20 +194,27 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     g = self.task_manager.characters.picking_pose_table_hoop
                 elif task == 4:
                     g = self.task_manager.characters.picking_pose_table_bending_tube
-                elif task == 5 or task == 7: #hoop_loading_inner
+                elif task == 5 or task == 7: #hoop_loading_inner or outer
                     g = self.task_manager.characters.loading_pose_hoop
-                elif task == 6 or task == 8: #bending_tube_loading_inner
+                elif task == 6 or task == 8: #bending_tube_loading_inner or outer
                     g = self.task_manager.characters.loading_pose_bending_tube
                 elif task == 9:
                     g = self.task_manager.characters.cutting_cube_pose
                 elif task == 10:
                     g = self.task_manager.characters.placing_product_pose
-                
-                self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.path_planner(s, g)
-                # self.task_manager.characters.path_idxs[idx] = 0
-            target_position, target_orientation, reaching_flag = self.task_manager.characters.step_next_pose(charac_idx = idx)
+                if np.linalg.norm(np.array(s[:2]) - np.array(g[:2])) < 0.1:
+                    reaching_flag = True
+                else:
+                    if task == 7:
+                        a = 1
+                    self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.path_planner(s.copy(), g.copy())
+            else:
+                target_position, target_orientation, reaching_flag = self.task_manager.characters.step_next_pose(charac_idx = idx)
+                target_position, target_orientation = torch.tensor([target_position], device=self.cuda_device, dtype=torch.float32), torch.tensor([target_orientation], device=self.cuda_device, dtype=torch.float32)
+                if reaching_flag: 
+                    self.task_manager.characters.reset_path(idx)
+
             if reaching_flag:
-                target_position, target_orientation = current_pose
                 if task in range(1, 5):
                     self.task_manager.characters.states[idx] = 2
                 elif task in range(5, 9): #loading
@@ -214,8 +223,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.task_manager.characters.states[idx] = 6
                 elif task == 10: #placing_products
                     self.task_manager.characters.states[idx] = 7
-            else: 
-                target_position, target_orientation = torch.tensor([target_position], device=self.cuda_device, dtype=torch.float32), torch.tensor([target_orientation], device=self.cuda_device, dtype=torch.float32)
+                
         elif state == 2: #worker is waiting agv
             if corresp_box_idx >= 0 and self.task_manager.agvs.states[corresp_agv_idx] == 3:
                 if task in range(1, 3):
@@ -351,7 +359,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                         reaching_flag = True
                     else:
                         s, g = world_pose_to_navigation_pose(current_pose), world_pose_to_navigation_pose(box_pose)
-                        self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s, g)
+                        self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s.copy(), g.copy())
                 else:
                     target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
                     target_position, target_orientation = torch.tensor([target_position], device=self.cuda_device, dtype=torch.float32), torch.tensor([target_orientation], device=self.cuda_device, dtype=torch.float32)
@@ -362,6 +370,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.task_manager.boxs.tasks[idx] = 2 #moving_with_box
                     
         elif state == 2: #carrying_box
+            reaching_flag = False
             if len(self.task_manager.agvs.x_paths[idx]) == 0:
                 target_position, target_orientation = current_pose
                 s = world_pose_to_navigation_pose(current_pose)
@@ -377,20 +386,24 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     g = self.task_manager.agvs.collecting_product_pose
                 elif task == 6:
                     g = self.task_manager.agvs.placing_product_pose
-                self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s, g)
+                if np.linalg.norm(np.array(s[:2]) - np.array(g[:2])) < 0.1:
+                    reaching_flag = True
+                else:
+                    self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s.copy(), g.copy())
                 # self.task_manager.agvs.path_idxs[idx] = 0
             else:
                 target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
                 target_position, target_orientation = torch.tensor([target_position], device=self.cuda_device, dtype=torch.float32), torch.tensor([target_orientation], device=self.cuda_device, dtype=torch.float32)
                 if reaching_flag:
                     self.task_manager.agvs.reset_path(idx)
-                    if task == 5: #reset agvs state
-                        self.task_manager.agvs.reset(idx)
-                        self.task_manager.boxs.states[corresp_box_idx] = 1 #waiting
-                        self.task_manager.boxs.tasks[corresp_box_idx] = 3 #collect products
-                        self.task_manager.task_in_dic[high_level_task]['agv_idx'] = -2 #task collecting product dont need agv later 
-                    else:
-                        self.task_manager.agvs.states[idx] = 3
+            if reaching_flag:
+                if task == 5: #reset agvs state
+                    self.task_manager.agvs.reset(idx)
+                    self.task_manager.boxs.states[corresp_box_idx] = 1 #waiting
+                    self.task_manager.boxs.tasks[corresp_box_idx] = 3 #collect products
+                    self.task_manager.task_in_dic[high_level_task]['agv_idx'] = -2 #task collecting product dont need agv later 
+                else:
+                    self.task_manager.agvs.states[idx] = 3
                 
         elif state == 3: #finished carrying box to the target position and waiting 
             target_position, target_orientation = current_pose
@@ -628,8 +641,10 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             # stations_are_full = self.station_state_inner_middle and self.station_state_outer_middle #only state == 0 means free, -1 and >= 0 means full
             if self.station_state_inner_middle == 9 and 'collect_product' in self.task_manager.task_in_dic and self.task_manager.boxs.product_collecting_idx >= 0: #welded product
                 self.gripper_inner_task = 4
+                self.gripper_inner_state = 1
             elif self.station_state_outer_middle == 9 and  'collect_product' in self.task_manager.task_in_dic and self.task_manager.boxs.product_collecting_idx >= 0:
                 self.gripper_inner_task = 5
+                self.gripper_inner_state = 1
             elif (pick_up_place_cube_index>=0): #pick cut cube by cutting machine
                 if self.process_groups_dict[pick_up_place_cube_index]['station'] == 'inner':
                     if self.station_state_inner_middle == 1: #station is waiting
@@ -1245,7 +1260,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.station_state_inner_left = -1
                 self.welder_inner_task =0
                 # self.gripper_inner_task = 4
-                self.gripper_inner_state = 1
+                # self.gripper_inner_state = 1
                 # cube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/cube_" + "{}".format(self.materials.inner_cube_processing_index))
                 # upper_tube_prim = self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/Materials/upper_tube_" + "{}".format(self.materials.inner_upper_tube_processing_index))
                 # product_prim = self.create_fixed_joint(self.materials.upper_tube_list[self.materials.inner_upper_tube_processing_index], 
@@ -1615,7 +1630,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.station_state_outer_left = -1
                 self.welder_outer_task =0
                 # self.gripper_inner_task = 5 
-                self.gripper_inner_state = 1
+                # self.gripper_inner_state = 1
                 '''set the upper tube under the ground'''
                 position = torch.tensor([[0,   0,   -100]], device=self.cuda_device)
                 self.materials.upper_tube_list[pick_up_upper_tube_index].set_world_poses(positions=position)

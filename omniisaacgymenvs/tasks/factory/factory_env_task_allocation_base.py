@@ -248,32 +248,44 @@ class Characters(object):
         elif high_level_task == 'bending_tube_loading_outer':
             self.tasks[idx] = 8
         elif high_level_task == 'cutting_cube':
-            self.tasks[idx] = 9
+            if self.tasks[1] == 0: #only assign worker 1 to do the cutting cube task 
+                self.tasks[1] = 9
+                idx = 1
+            else:
+                return -1
         elif high_level_task == 'placing_product':
             self.tasks[idx] = 10
         return idx
     
-    def find_available_charac(self):
+    def find_available_charac(self, idx=0):
         try:
-            return self.tasks.index(0)
+            return self.tasks.index(idx)
         except: 
             return -1
 
     def step_next_pose(self, charac_idx = 0):
         reaching_flag = False
         #skip the initial pose
+        # if len(self.x_paths[agv_idx]) == 0:
+        #     position = [current_pose[0], current_pose[1], 0]
+        #     euler_angles = [0,0, current_pose[2]]
+        #     return position, quaternion.eulerAnglesToQuaternion(euler_angles), True
+
         self.path_idxs[charac_idx] += 1
         path_idx = self.path_idxs[charac_idx]
+        # if agv_idx == 0:
+        #     a = 1
         if path_idx == (len(self.x_paths[charac_idx]) - 1):
-            self.reset_path(charac_idx)
-            return None, None, True
+            reaching_flag = True
+            position = [self.x_paths[charac_idx][-1], self.y_paths[charac_idx][-1], 0]
+            euler_angles = [0,0, self.yaws[charac_idx][-1]]
         else:
             position = [self.x_paths[charac_idx][path_idx], self.y_paths[charac_idx][path_idx], 0]
             euler_angles = [0,0, self.yaws[charac_idx][path_idx]]
 
         orientation = quaternion.eulerAnglesToQuaternion(euler_angles)
-
         return position, orientation, reaching_flag
+
     
     def reset_path(self, charac_idx):
         self.x_paths[charac_idx] = []
@@ -360,7 +372,7 @@ class Agvs(object):
         path_idx = self.path_idxs[agv_idx]
         # if agv_idx == 0:
         #     a = 1
-        if path_idx == (len(self.x_paths[agv_idx]) - 1):
+        if path_idx >= (len(self.x_paths[agv_idx])):
             reaching_flag = True
             position = [self.x_paths[agv_idx][-1], self.y_paths[agv_idx][-1], 0]
             euler_angles = [0,0, self.yaws[agv_idx][-1]]
