@@ -108,7 +108,7 @@ class Materials(object):
         self.inner_upper_tube_processing_index = -1
         #for outer station
         self.outer_hoop_processing_index = -1
-        self.outer_cube_processing_index = -1
+        self.outer_cube_processing_index = -1   #equal to product processing index
         self.outer_bending_tube_processing_index = -1
         self.outer_upper_tube_processing_index = -1
 
@@ -143,7 +143,14 @@ class Materials(object):
         pass
 
     def done(self):
-        return max(self.product_states) == -1
+        return min(self.product_states) == 2
+    
+    def produce_product_req(self):
+        try:
+            self.product_states.index(0)
+            return True
+        except: 
+            return False
 
     def find_next_raw_cube_index(self):
         # index 
@@ -440,33 +447,48 @@ class TransBoxs(object):
             return -2
         
         if high_level_task == 'placing_product':
-            return self.find_full_products_box_idx()
+            idx = self.find_carrying_products_box_idx()
+            if idx >=0 :
+                self.high_level_tasks[idx] = high_level_task
+                self.tasks[idx] = 1 
+                return idx
+            else:
+                return -1 
         
         idx = self.find_available_box()
         if idx == -1:
             if high_level_task == 'collect_product':
                 self.product_collecting_idx = -1
-            return idx
+            return -1
         # if high_level_task == 'hoop_preparing' or high_level_task == 'bending_tube_preparing' or high_level_task == 'colle':
             # idx = self.find_available_charac()
-        if high_level_task == 'collect_product':
-            self.product_collecting_idx = idx
-        self.high_level_tasks[idx] = high_level_task
-        self.tasks[idx] = 1 
-        return idx
-    
+        else:
+            self.high_level_tasks[idx] = high_level_task
+            self.tasks[idx] = 1 
+            if high_level_task == 'collect_product':
+                self.product_collecting_idx = idx
+            return idx
+
     def find_available_box(self):
         try:
             return self.tasks.index(0)
         except: 
             return -1
         
-    def find_full_products_box_idx(self):
+    def find_carrying_products_box_idx(self):
         for list, idx in zip(self.product_idx_list, range(len(self.product_idx_list))):
-            if len(list) == self.CAPACITY:
+            if len(list) > 0:
                 return idx
         else:
             return -1
+        
+    def find_full_products_box_idx(self):
+        for list, idx in zip(self.product_idx_list, range(len(self.product_idx_list))):
+            if len(list) > self.CAPACITY:
+                return idx
+        else:
+            return -1
+    
         
     def is_full_products(self):
         return self.find_full_products_box_idx() != -1

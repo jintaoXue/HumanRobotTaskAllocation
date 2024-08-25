@@ -103,9 +103,9 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         elif self.state_depot_bending_tube == 2: #placed
             self.state_depot_bending_tube = 0
 
-        for product_idx in self.depot_product_set:
+        for idx in self.depot_product_set:
             self.materials.product_list[idx].set_velocities(torch.zeros((1,6), device=self.cuda_device))
-            self.materials.product_list[product_idx].set_world_poses(self.materials.position_depot_product[idx].to(self.cuda_device), self.materials.orientation_depot_product.to(self.cuda_device))
+            self.materials.product_list[idx].set_world_poses(self.materials.position_depot_product[idx].to(self.cuda_device), self.materials.orientation_depot_product.to(self.cuda_device))
 
         #raw material
         for idx, state in zip(range(0, len(self.materials.hoop_states)), self.materials.hoop_states):
@@ -152,9 +152,10 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.task_manager.assign_task(task='cutting_cube') 
         if self.state_depot_bending_tube == 2 and self.state_depot_hoop == 2 and 'collect_product' not in self.task_manager.task_in_dic.keys():
             self.task_manager.assign_task(task='collect_product')
-        if 'collect_product' in self.task_manager.task_in_dic.keys() and self.task_manager.boxs.is_full_products():
+        if 'collect_product' in self.task_manager.task_in_dic.keys() and (self.task_manager.boxs.is_full_products() or self.materials.produce_product_req() == False) :
             self.task_manager.task_clearing(task='collect_product')
             self.task_manager.assign_task(task='placing_product')
+            self.task_manager.boxs.product_collecting_idx = -1
         self.task_manager.step()
         
         for charac_idx in range(0, self.task_manager.characters.num):
@@ -213,14 +214,12 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.task_manager.characters.reset_path(idx)
 
             if reaching_flag:
-                if task in range(1, 5):
+                if task in range(1, 5) or task == 10:
                     self.task_manager.characters.states[idx] = 2
                 elif task in range(5, 9): #loading
                     self.task_manager.characters.states[idx] = 5
                 elif task == 9: #cutting machine
                     self.task_manager.characters.states[idx] = 6
-                elif task == 10: #placing_products
-                    self.task_manager.characters.states[idx] = 7
                 
         elif state == 2: #worker is waiting agv
             if corresp_box_idx >= 0 and self.task_manager.agvs.states[corresp_agv_idx] == 3:
@@ -450,11 +449,11 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         for idx in bending_tube_idx_set:
             offset=self.materials.in_box_offsets[idx].to(self.cuda_device)
             self.materials.bending_tube_list[idx].set_world_poses(positions=target_position+offset)
-            self.materials.hoop_list[idx].set_velocities(torch.zeros((1,6), device=self.cuda_device))  
+            self.materials.bending_tube_list[idx].set_velocities(torch.zeros((1,6), device=self.cuda_device))  
         for idx in product_idx_list:
             offset=self.materials.in_box_offsets[idx].to(self.cuda_device)
             self.materials.product_list[idx].set_world_poses(positions=target_position+offset)
-            self.materials.hoop_list[idx].set_velocities(torch.zeros((1,6), device=self.cuda_device))  
+            self.materials.product_list[idx].set_velocities(torch.zeros((1,6), device=self.cuda_device))  
         return
 
     def path_planner(self, s, g):
@@ -715,6 +714,9 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.gripper_inner_state = 0
                     self.materials.product_states[self.materials.inner_cube_processing_index] = 1 # product is collected
                     self.proc_groups_inner_list.pop(0)
+                    collecting_box_idx = self.task_manager.task_in_dic['collect_product']['box_idx'] 
+                    self.task_manager.boxs.product_idx_list[collecting_box_idx].append(self.materials.inner_cube_processing_index)
+                    self.task_manager.boxs.counts[collecting_box_idx] += 1
                     self.materials.inner_cube_processing_index = -1
             elif self.gripper_inner_task == 7: #place_product_from_outer
                 placing_material = self.materials.product_list[self.materials.outer_cube_processing_index]
@@ -725,12 +727,17 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 if move_done:
                     "a product is produced and placed on the robot, then do resetting"
                     self.gripper_inner_state = 0
-                    self.materials.product_states[self.materials.inner_cube_processing_index] = 1 # product is collected
+                    self.materials.product_states[self.materials.outer_cube_processing_index] = 1 # product is collected
                     self.proc_groups_outer_list.pop(0)
+                    collecting_box_idx = self.task_manager.task_in_dic['collect_product']['box_idx'] 
+                    self.task_manager.boxs.product_idx_list[collecting_box_idx].append(self.materials.outer_cube_processing_index)
+                    self.task_manager.boxs.counts[collecting_box_idx] += 1
                     self.materials.outer_cube_processing_index = -1
+
             # ref_pose[0] += torch.tensor([[0,   0,   -0.3]], device=self.cuda_device)
             placing_material.set_world_poses(positions=positions+translate_tensor, orientations=orientations)
             placing_material.set_velocities(torch.zeros((1,6), device=self.cuda_device))
+            
             # self.materials.cube_list[pick_up_place_cube_index].set_world_poses(
             #     positions=ref_pose[0]+torch.tensor([[-1,   0,   0]], device=self.cuda_device), 
             #     orientations=torch.tensor([[ 9.9490e-01, -1.0071e-01, -5.6209e-04,  5.7167e-03]], device=self.cuda_device))

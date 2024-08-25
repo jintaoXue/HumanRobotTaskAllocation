@@ -77,3 +77,6 @@ path planner需要继续优化
 
 cutting cube 的操作用worker去做，可以尝试判断一下位姿关系，选择靠近cutting machine的worker
 worker 0 要呆在左边
+
+# 8.25
+基本搞定 product的放置位置还需要调整 以及大循环的终止条件还需要修改
