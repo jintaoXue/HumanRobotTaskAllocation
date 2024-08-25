@@ -707,7 +707,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             elif self.gripper_inner_task == 6: #place_product_from_inner
                 placing_material = self.materials.product_list[self.materials.inner_cube_processing_index]
                 orientations = torch.tensor([[ 1, 0,0,0.0]], device=self.cuda_device)
-                # translate_tensor = torch.tensor([[10.1983,   -6.4176,   -2.4110]], device=self.cuda_device)
+                translate_tensor = torch.tensor([[0.,  0, -2.]], device=self.cuda_device)
                 target_pose = torch.tensor([[-9.7, -1, -1, 0, 0, 0, 0, 0, 0, 0]], device=self.cuda_device)
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
                 if move_done:
@@ -719,7 +719,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             elif self.gripper_inner_task == 7: #place_product_from_outer
                 placing_material = self.materials.product_list[self.materials.outer_cube_processing_index]
                 orientations = torch.tensor([[1,0,0,0.0]], device=self.cuda_device)
-                # translate_tensor = torch.tensor([[10.1983,   -6.4176,   -2.4110]], device=self.cuda_device)
+                translate_tensor = torch.tensor([[0, 0., -2.]], device=self.cuda_device)
                 target_pose = torch.tensor([[-9.7, -1, -1, 0, 0, 0, 0, 0, 0, 0]], device=self.cuda_device)
                 next_pos_inner, delta_pos, move_done = self.get_gripper_moving_pose(gripper_pose_inner[0], target_pose[0], 'place')
                 if move_done:
@@ -1017,7 +1017,8 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.materials.hoop_list[self.materials.inner_hoop_processing_index].set_world_poses(positions=torch.tensor([[0,0,-100]], device=self.cuda_device))
             self.materials.hoop_list[self.materials.inner_hoop_processing_index].set_velocities(torch.zeros((1,6), device=self.cuda_device))
             self.materials.inner_hoop_processing_index = -1
-        if self.station_state_inner_left in range(2,6):
+            self.station_state_inner_left = -1
+        if self.station_state_inner_left in range(3,6):
             inner_revolution_target = 0.0
        
         return inner_revolution_target
@@ -1080,7 +1081,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.materials.cube_list[self.materials.inner_cube_processing_index].set_world_poses(positions=torch.tensor([[0,0,-100]], device=self.cuda_device))
             self.materials.cube_list[self.materials.inner_cube_processing_index].set_velocities(torch.zeros((1,6), device=self.cuda_device))
             #set product position
-            position, orientation= (torch.tensor([[-20.36326,  -2.8855,  1.0]], device=self.cuda_device), torch.tensor([[ 1,0,0,0.0]], device=self.cuda_device))
+            position, orientation= (torch.tensor([[-22.04908, 3.40965, 1.0]], device=self.cuda_device), torch.tensor([[ 1,0,0,0.0]], device=self.cuda_device))
             self.materials.product_list[self.materials.inner_cube_processing_index].set_world_poses(positions=position, orientations=orientation)
         elif self.station_state_inner_middle == -1: #resetting middle part
             if torch.abs(dof_inner_middle_A[0] - target_inner_middle_A) <= THRESHOLD:
@@ -1255,7 +1256,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.welder_inner_oper_time = 0
                 self.welder_inner_state = 9
                 self.station_state_inner_middle = 9 #welded_upper
-                self.station_state_inner_left = -1
+                self.station_state_inner_left = 6
                 self.welder_inner_task =0
                 # self.gripper_inner_task = 4
                 # self.gripper_inner_state = 1
@@ -1425,7 +1426,8 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.materials.hoop_list[self.materials.outer_hoop_processing_index].set_world_poses(positions=torch.tensor([[0,0,-100]], device=self.cuda_device))
             self.materials.hoop_list[self.materials.outer_hoop_processing_index].set_velocities(torch.zeros((1,6), device=self.cuda_device))
             self.materials.outer_hoop_processing_index = -1
-        if self.station_state_outer_left in range(2,6):
+            self.station_state_outer_left = -1
+        if self.station_state_outer_left in range(3,6):
             outer_revolution_target = 0.0
        
         return outer_revolution_target
@@ -1488,7 +1490,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.materials.cube_list[self.materials.outer_cube_processing_index].set_world_poses(positions=torch.tensor([[0,0,-100]], device=self.cuda_device))
             self.materials.cube_list[self.materials.outer_cube_processing_index].set_velocities(torch.zeros((1,6), device=self.cuda_device))
             #set product position
-            position, orientation= (torch.tensor([[-20.36326,  0.4,  1.0]], device=self.cuda_device), torch.tensor([[ 1,0,0,0.0]], device=self.cuda_device))
+            position, orientation= (torch.tensor([[-22.04908, 6.69515, 1.]], device=self.cuda_device), torch.tensor([[ 1,0,0,0.0]], device=self.cuda_device))
             self.materials.product_list[self.materials.outer_cube_processing_index].set_world_poses(positions=position, orientations=orientation)
         elif self.station_state_outer_middle == -1: #resetting middle part
             if torch.abs(dof_outer_middle_A[0] - target_outer_middle_A) <= THRESHOLD:
@@ -1625,7 +1627,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 self.welder_outer_oper_time = 0
                 self.welder_outer_state = 9
                 self.station_state_outer_middle = 9 #welded_upper
-                self.station_state_outer_left = -1
+                self.station_state_outer_left = 6
                 self.welder_outer_task =0
                 # self.gripper_inner_task = 5 
                 # self.gripper_inner_state = 1
