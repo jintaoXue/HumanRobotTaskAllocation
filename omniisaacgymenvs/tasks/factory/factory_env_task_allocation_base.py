@@ -124,7 +124,7 @@ class Materials(object):
         orientation = [[-1.6081e-16, -6.1232e-17,  1.0000e+00, -6.1232e-17]]
         self.position_depot_bending_tube, self.orientation_depot_bending_tube = torch.tensor(position, dtype=torch.float32), torch.tensor(orientation, dtype=torch.float32)
 
-        position = [[[-27.18078, 11.10059, 0]], [[-27.18078, 12.3697, 0]], [[-27.18078, 13.25518, 0]]]
+        position = [[[-35., 15., 0]], [[-35, 16, 0]], [[-35, 17, 0]]]
         orientation = [[1 ,0 ,0, 0]]
         self.position_depot_product, self.orientation_depot_product = torch.tensor(position, dtype=torch.float32), torch.tensor(orientation, dtype=torch.float32)
 

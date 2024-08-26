@@ -66,7 +66,8 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             # In this policy, episode length is constant
             is_last_step = self.progress_buf[0] == self.max_episode_length - 1
             #initial pose: self.obj_0_3.get_world_poses() (tensor([[-8.3212,  2.2496,  2.7378]], device=self.cuda_device), tensor([[ 0.9977, -0.0665,  0.0074,  0.0064]], device=self.cuda_device))
-            if not self.materials.done():
+            # if not self.materials.done():
+            if True:
                 self.post_material_step()
                 self.post_task_manager_step()
                 self.post_conveyor_belt_step()
