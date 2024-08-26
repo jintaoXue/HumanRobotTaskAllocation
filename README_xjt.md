@@ -80,3 +80,12 @@ worker 0 要呆在左边
 
 # 8.25
 基本搞定 product的放置位置还需要调整 以及大循环的终止条件还需要修改
+
+# 8.26
+upper tube 的picking index有bug 
+待优化：人物动作 loading的动画 人物行走方向 并行训练
+下一步：加入路网图、修改cutting machine
+
+idea: two-stage RL network
+
+场景的泛化性要考虑： 改变worker 和 machine的数量

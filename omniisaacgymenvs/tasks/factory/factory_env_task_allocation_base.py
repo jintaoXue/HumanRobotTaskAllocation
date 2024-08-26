@@ -116,19 +116,19 @@ class Materials(object):
         self.initial_bending_tube_pose = None
 
 
-        position = [[[-14.44042, 4.77828, 0.6]], [[-13.78823, 4.77828, 0.6]], [[-14.44042, 5.59765, 0.6]]]
+        position = [[[-14.44042, 4.77828, 0.6]], [[-13.78823, 4.77828, 0.6]], [[-14.44042, 5.59765, 0.6]], [[-13.78823, 5.59765, 0.6]]]
         orientation = [[1 ,0 ,0, 0]]
         self.position_depot_hoop, self.orientation_depot_hoop = torch.tensor(position, dtype=torch.float32), torch.tensor(orientation, dtype=torch.float32)
         
-        position = [[[-31.64901, 4.40483, 1.1]], [[-30.80189, 4.40483, 1.1]], [[-31.64901, 5.31513, 1.1]]]
+        position = [[[-31.64901, 4.40483, 1.1]], [[-30.80189, 4.40483, 1.1]], [[-31.64901, 5.31513, 1.1]], [[-30.80189, 5.31513, 1.1]]]
         orientation = [[-1.6081e-16, -6.1232e-17,  1.0000e+00, -6.1232e-17]]
         self.position_depot_bending_tube, self.orientation_depot_bending_tube = torch.tensor(position, dtype=torch.float32), torch.tensor(orientation, dtype=torch.float32)
 
-        position = [[[-35., 15., 0]], [[-35, 16, 0]], [[-35, 17, 0]]]
+        position = [[[-35., 15., 0]], [[-35, 16, 0]], [[-35, 17, 0]], [[-35, 18, 0]], [[-35, 19, 0]]]
         orientation = [[1 ,0 ,0, 0]]
         self.position_depot_product, self.orientation_depot_product = torch.tensor(position, dtype=torch.float32), torch.tensor(orientation, dtype=torch.float32)
 
-        in_box_offsets = [[[0.5,0.5, 0.5]], [[-0.5,0.5, 0.5]], [[0.5,-0.5, 0.5]]]
+        in_box_offsets = [[[0.5,0.5, 0.5]], [[-0.5,0.5, 0.5]], [[0.5,-0.5, 0.5]], [[-0.5, -0.5, 0.5]]]
         self.in_box_offsets = torch.tensor(in_box_offsets, dtype=torch.float32) 
 
 
@@ -214,9 +214,9 @@ class Characters(object):
         self.picking_pose_hoop = [1.28376, 6.48821, np.deg2rad(0)] 
         self.picking_pose_bending_tube = [1.28376, 13.12021, np.deg2rad(0)] 
         self.picking_pose_table_hoop = [-12.26318, 4.72131, np.deg2rad(0)]
-        self.picking_pose_table_bending_tube = [-32, 8.0, np.deg2rad(0)]
+        self.picking_pose_table_bending_tube = [-32, 8.0, np.deg2rad(-90)]
 
-        self.loading_pose_hoop = [-16.26241, 4.14283, np.deg2rad(0)]
+        self.loading_pose_hoop = [-16.26241, 6.0, np.deg2rad(180)]
         self.loading_pose_bending_tube = [-29.06123, 6.3725, np.deg2rad(0)]
 
         self.cutting_cube_pose = [-29.83212, -1.54882, np.deg2rad(0)]
@@ -255,11 +255,19 @@ class Characters(object):
         elif high_level_task == 'bending_tube_loading_outer':
             self.tasks[idx] = 8
         elif high_level_task == 'cutting_cube':
-            if self.tasks[1] == 0: #only assign worker 1 to do the cutting cube task 
-                self.tasks[1] = 9
-                idx = 1
-            else:
-                return -1
+            #todo
+            for _idx in range(0, len(self.list)):
+                xyz, _ = self.list[_idx].get_world_poses()
+                idx = -1
+                if self.tasks[_idx] == 0 and xyz[0][0] < -22:
+                    self.tasks[_idx] = 9
+                    idx = _idx
+                    return idx
+            # if self.tasks[1] == 0: #only assign worker 1 to do the cutting cube task 
+            #     self.tasks[1] = 9
+            #     idx = 1
+            # else:
+            #     return -1
         elif high_level_task == 'placing_product':
             self.tasks[idx] = 10
         return idx
@@ -342,11 +350,11 @@ class Agvs(object):
         self.tasks[idx] = 0
         self.states[idx] = 0
 
-    def assign_task(self, high_level_task):
-        #todo 
+    def assign_task(self, high_level_task, box_idx, box_xyz):
+        #todo  
         if high_level_task not in self.task_range:
             return -2
-        idx = self.find_available_agv()
+        idx = self.find_available_agv(box_idx, box_xyz)
         if idx == -1:
             return idx
         if high_level_task == 'hoop_preparing':
@@ -361,11 +369,23 @@ class Agvs(object):
             self.tasks[idx] = 6 
         return idx
     
-    def find_available_agv(self):
-        try:
-            return self.tasks.index(0)
-        except: 
-            return -1
+    def find_available_agv(self, box_idx, box_xyz):
+        if box_idx == -1: 
+            try:
+                return self.tasks.index(0)
+            except: 
+                return -1
+        else:
+            min_dis_idx = -1
+            pre_dis = torch.inf
+            for agv_idx in range(0, len(self.list)):
+                if self.tasks[agv_idx] == 0:
+                    agv_xyz, _ = self.list[agv_idx].get_world_poses()
+                    dis = torch.norm(agv_xyz[0] - box_xyz)
+                    if dis.cpu() < pre_dis:
+                        pre_dis = dis
+                        min_dis_idx = agv_idx
+            return min_dis_idx
     
     def step_next_pose(self, agv_idx):
         reaching_flag = False
@@ -484,7 +504,7 @@ class TransBoxs(object):
         
     def find_full_products_box_idx(self):
         for list, idx in zip(self.product_idx_list, range(len(self.product_idx_list))):
-            if len(list) > self.CAPACITY:
+            if len(list) >= self.CAPACITY:
                 return idx
         else:
             return -1
@@ -509,8 +529,10 @@ class TaskManager(object):
     def assign_task(self, task):
         
         charac_idx = self.characters.assign_task(task)
-        agv_idx = self.agvs.assign_task(task)
         box_idx = self.boxs.assign_task(task)
+        box_xyz, _ = self.boxs.list[box_idx].get_world_poses()
+        agv_idx = self.agvs.assign_task(task, box_idx, box_xyz[0])
+        
         lacking_resource = False
         if charac_idx == -1 or agv_idx == -1 or box_idx == -1:
             lacking_resource = True            
@@ -531,16 +553,23 @@ class TaskManager(object):
 
         return
 
-
     def step(self):
         for task in self.task_in_set:
             if self.task_in_dic[task]['lacking_resource']:
                 if self.task_in_dic[task]['charac_idx'] == -1:
                     self.task_in_dic[task]['charac_idx'] = self.characters.assign_task(task)
-                if self.task_in_dic[task]['agv_idx'] == -1:
-                    self.task_in_dic[task]['agv_idx'] = self.agvs.assign_task(task)
                 if self.task_in_dic[task]['box_idx'] == -1:
                     self.task_in_dic[task]['box_idx'] = self.boxs.assign_task(task)
+                    #reset agv idx and find the suitable agv for box again
+                    agv_idx = self.task_in_dic[task]['agv_idx']
+                    if agv_idx >= 0:
+                        self.agvs.reset(agv_idx)
+                        self.task_in_dic[task]['agv_idx'] = -1
+                if self.task_in_dic[task]['agv_idx'] == -1:
+                    box_idx = self.task_in_dic[task]['box_idx']
+                    box_xyz, _ = self.boxs.list[box_idx].get_world_poses()
+                    self.task_in_dic[task]['agv_idx'] = self.agvs.assign_task(task, box_idx, box_xyz)
+
                 try:
                     list(self.task_in_dic[task].values()).index(-1)
                     self.task_in_dic[task]['lacking_resource'] = True
@@ -710,6 +739,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.obj_2_loader_1 =  ArticulationView(
             prim_paths_expr="/World/envs/.*/obj/part2/Loaders/Loader1", name="obj_2_loader_1", reset_xform_properties=False
         )
+
         self.materials_cube_0 = RigidPrimView(
             prim_paths_expr="/World/envs/.*/obj/Materials/cubes/cube_0",
             name="cube_0",
@@ -735,6 +765,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
             name="product_0",
             track_contact_forces=True,
         )
+
         self.materials_cube_1 = RigidPrimView(
             prim_paths_expr="/World/envs/.*/obj/Materials/cubes/cube_01",
             name="cube_1",
@@ -760,6 +791,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
             name="product_1",
             track_contact_forces=True,
         )
+
         self.materials_cube_2 = RigidPrimView(
             prim_paths_expr="/World/envs/.*/obj/Materials/cubes/cube_02",
             name="cube_2",
@@ -785,6 +817,59 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
             name="product_2",
             track_contact_forces=True,
         )
+
+        self.materials_cube_3 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/cubes/cube_03",
+            name="cube_3",
+            track_contact_forces=True,
+        )
+        self.materials_hoop_3 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/hoops/hoop_03",
+            name="hoop_3",
+            track_contact_forces=True,
+        )
+        self.materials_bending_tube_3 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tubes/bending_tube_03",
+            name="bending_tube_3",
+            track_contact_forces=True,
+        )
+        self.materials_upper_tube_3 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tubes/upper_tube_03",
+            name="upper_tube_3",
+            track_contact_forces=True,
+        )
+        self.product_3 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/products/product_03",
+            name="product_3",
+            track_contact_forces=True,
+        )
+
+
+        self.materials_cube_4 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/cubes/cube_04",
+            name="cube_4",
+            track_contact_forces=True,
+        )
+        self.materials_hoop_4 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/hoops/hoop_04",
+            name="hoop_4",
+            track_contact_forces=True,
+        )
+        self.materials_bending_tube_4 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/bending_tubes/bending_tube_04",
+            name="bending_tube_4",
+            track_contact_forces=True,
+        )
+        self.materials_upper_tube_4 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/upper_tubes/upper_tube_04",
+            name="upper_tube_4",
+            track_contact_forces=True,
+        )
+        self.product_4 = RigidPrimView(
+            prim_paths_expr="/World/envs/.*/obj/Materials/products/product_04",
+            name="product_4",
+            track_contact_forces=True,
+        )
         scene.add(self.obj_11_station_0)
         scene.add(self.obj_11_station_1)
         scene.add(self.obj_11_welding_0)
@@ -802,27 +887,45 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         scene.add(self.obj_0_1)
         scene.add(self.obj_belt_0)
         scene.add(self.obj_belt_1)
+
         scene.add(self.materials_cube_0)
         scene.add(self.materials_hoop_0)
         scene.add(self.materials_bending_tube_0)
         scene.add(self.materials_upper_tube_0)
-        scene.add(self.product_0)        
+        scene.add(self.product_0)   
+
         scene.add(self.materials_cube_1)
         scene.add(self.materials_hoop_1)
         scene.add(self.materials_bending_tube_1)
         scene.add(self.materials_upper_tube_1)
-        scene.add(self.product_1)        
+        scene.add(self.product_1) 
+
         scene.add(self.materials_cube_2)
         scene.add(self.materials_hoop_2)
         scene.add(self.materials_bending_tube_2)
         scene.add(self.materials_upper_tube_2)
         scene.add(self.product_2)
+    
+        scene.add(self.materials_cube_3)
+        scene.add(self.materials_hoop_3)
+        scene.add(self.materials_bending_tube_3)
+        scene.add(self.materials_upper_tube_3)
+        scene.add(self.product_3)
+      
+        scene.add(self.materials_cube_4)
+        scene.add(self.materials_hoop_4)
+        scene.add(self.materials_bending_tube_4)
+        scene.add(self.materials_upper_tube_4)
+        scene.add(self.product_4)
+
+
         #materials states
-        self.materials : Materials = Materials(cube_list=[self.materials_cube_0, self.materials_cube_1, self.materials_cube_2], 
-                hoop_list=[self.materials_hoop_0, self.materials_hoop_1, self.materials_hoop_2], 
-                bending_tube_list=[self.materials_bending_tube_0, self.materials_bending_tube_1, self.materials_bending_tube_2], 
-                upper_tube_list=[self.materials_upper_tube_0, self.materials_upper_tube_1, self.materials_upper_tube_2], 
-                product_list = [self.product_0, self.product_1, self.product_2])
+        cube_list = [self.materials_cube_0, self.materials_cube_1, self.materials_cube_2, self.materials_cube_3, self.materials_cube_4]
+        hoop_list = [self.materials_hoop_0, self.materials_hoop_1, self.materials_hoop_2, self.materials_hoop_3, self.materials_hoop_4]
+        bending_tube_list = [self.materials_bending_tube_0, self.materials_bending_tube_1, self.materials_bending_tube_2, self.materials_bending_tube_3, self.materials_bending_tube_4]
+        upper_tube_list = [self.materials_upper_tube_0, self.materials_upper_tube_1, self.materials_upper_tube_2, self.materials_upper_tube_3, self.materials_upper_tube_4]
+        product_list = [self.product_0, self.product_1, self.product_2, self.product_3, self.product_4]
+        self.materials : Materials = Materials(cube_list=cube_list, hoop_list=hoop_list, bending_tube_list=bending_tube_list, upper_tube_list=upper_tube_list, product_list = product_list)
         # self.materials_flag_dic = {-1:"done", 0:"wait", 1:"conveying", 2:"conveyed", 3:"cutting", 4:"cut_done", 5:"pick_up_cut", 
         # 5:"down", 6:"combine_l", 7:"weld_l", 8:"combine_r", 9:"weld_r"}
         # conveyor
@@ -978,6 +1081,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.cuda_device = torch.device("cuda:0")
         self.xyResolution = 5
         self.obstacleX, self.obstacleY = hybridAStar.map_png(self.xyResolution)
+        self.planning_mid_point = [140, 220, 0]
         self.mapParameters = hybridAStar.calculateMapParameters(self.obstacleX, self.obstacleY, self.xyResolution, np.deg2rad(15.0))
         return
     

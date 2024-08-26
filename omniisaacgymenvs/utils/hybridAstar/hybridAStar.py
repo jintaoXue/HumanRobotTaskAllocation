@@ -9,9 +9,9 @@ import scipy.spatial.kdtree as kd
 from . import reeds_shepp as rsCurve
 
 class Car:
-    scale = 5
+    scale = 10
     # maxSteerAngle = 0.6
-    maxSteerAngle = 1.0
+    maxSteerAngle = 1.2
     steerPresion = 10
     wheelBase = 3.5/scale
     axleToFront = 4.5/scale
