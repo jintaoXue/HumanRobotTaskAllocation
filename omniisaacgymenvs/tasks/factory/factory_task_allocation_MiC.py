@@ -1131,6 +1131,8 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             #set product position
             position, orientation= (torch.tensor([[-22.04908, 3.40965, 1.0]], device=self.cuda_device), torch.tensor([[ 1,0,0,0.0]], device=self.cuda_device))
             self.materials.product_list[self.materials.inner_cube_processing_index].set_world_poses(positions=position, orientations=orientation)
+            self.materials.product_list[self.materials.inner_cube_processing_index].set_velocities(torch.zeros((1,6), device=self.cuda_device))
+
         elif self.station_state_inner_middle == -1: #resetting middle part
             if torch.abs(dof_inner_middle_A[0] - target_inner_middle_A) <= THRESHOLD:
                 self.station_state_inner_middle = 0
@@ -1540,6 +1542,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             #set product position
             position, orientation= (torch.tensor([[-22.04908, 6.69515, 1.]], device=self.cuda_device), torch.tensor([[ 1,0,0,0.0]], device=self.cuda_device))
             self.materials.product_list[self.materials.outer_cube_processing_index].set_world_poses(positions=position, orientations=orientation)
+            self.materials.product_list[self.materials.outer_cube_processing_index].set_velocities(torch.zeros((1,6), device=self.cuda_device))
         elif self.station_state_outer_middle == -1: #resetting middle part
             if torch.abs(dof_outer_middle_A[0] - target_outer_middle_A) <= THRESHOLD:
                 self.station_state_outer_middle = 0

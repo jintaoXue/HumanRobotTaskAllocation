@@ -84,7 +84,7 @@ worker 0 要呆在左边
 # 8.26
 upper tube 的picking index有bug 
 待优化：人物动作 loading的动画 人物行走方向 并行训练
-下一步：加入路网图、修改cutting machine
+下一步：加入路网图、修改cutting machine task的选择过程
 
 idea: two-stage RL network
 
