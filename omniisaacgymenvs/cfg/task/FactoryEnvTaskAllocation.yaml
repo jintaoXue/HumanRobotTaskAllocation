@@ -13,6 +13,8 @@ sim:
 env:
   env_name: 'FactoryEnvTaskAlloc'
   desired_subassemblies: ['obj_all']
+  route_character_file_path: "~/work/Dataset/3D_model/routes_character.pkl"
+  route_agv_file_path: "~/work/Dataset/3D_model/routes_agv.pkl"
   # desired_subassemblies: ['obj_0_0', 'obj_0_1', 'obj_0_2']
   # desired_subassemblies: ['obj_1_1', 'obj_1_2']
   nut_lateral_offset: 0.0  # Y-axis offset of nut before initial reset to prevent initial interpenetration with bolt

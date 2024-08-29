@@ -62,7 +62,15 @@ from omni.usd import get_world_transform_matrix, get_local_transform_matrix
 from omniisaacgymenvs.utils.geometry import quaternion  
 from omniisaacgymenvs.utils.hybridAstar import hybridAStar 
 from omni.isaac.core.utils.prims import set_prim_visibility
+import matplotlib.pyplot as plt
+from omniisaacgymenvs.utils.hybridAstar import hybridAStar 
+import pickle, os
 
+def world_pose_to_navigation_pose(world_pose):
+    position, orientation = world_pose[0][0].cpu().numpy(), world_pose[1][0].cpu().numpy()
+    euler_angles = quaternion.quaternionToEulerAngles(orientation)
+    nav_pose = [position[0], position[1], euler_angles[2]]
+    return nav_pose
 
 class Materials(object):
 
@@ -190,16 +198,26 @@ class Characters(object):
         self.num = len(character_list)
         self.list = character_list
         self.state_character_dic = {0:"free", 1:"approaching", 2:"waiting_box", 3:"putting_in_box", 4:"putting_on_table"}
+        self.task_range = {'hoop_preparing', 'bending_tube_preparing', 'hoop_loading_inner', 'bending_tube_loading_inner', 'hoop_loading_outer', 'bending_tube_loading_outer', "cutting_cube", 
+                           'placing_product'}
         self.sub_task_character_dic = {0:"free", 1:"put_hoop_into_box", 2:"put_bending_tube_into_box", 3:"put_hoop_on_table", 4:"put_bending_tube_on_table", 
                                     5:'hoop_loading_inner', 6:'bending_tube_loading_inner', 7:'hoop_loading_outer', 8: 'bending_tube_loading_outer', 9: 'cutting_cube', 10:'placing_product'}
         
         self.low2high_level_task_dic = {"put_hoop_into_box":"hoop_preparing", "put_bending_tube_into_box":'bending_tube_preparing', "put_hoop_on_table":'hoop_preparing', 
-                                            "put_bending_tube_on_table":'bending_tube_preparing', 
-                                    'hoop_loading_inner':'hoop_loading_inner', 'bending_tube_loading_inner':'bending_tube_loading_inner', 'hoop_loading_outer':'hoop_loading_outer', 
-                                    'bending_tube_loading_outer': 'bending_tube_loading_outer', 'cutting_cube': 'cutting_cube', 'placing_product':'placing_product'}
-
-        self.task_range = {'hoop_preparing', 'bending_tube_preparing', 'hoop_loading_inner', 'bending_tube_loading_inner', 'hoop_loading_outer', 'bending_tube_loading_outer', "cutting_cube", 
-                           'placing_product'}
+                        "put_bending_tube_on_table":'bending_tube_preparing', 'hoop_loading_inner':'hoop_loading_inner', 'bending_tube_loading_inner':'bending_tube_loading_inner', 
+                        'hoop_loading_outer':'hoop_loading_outer', 'bending_tube_loading_outer': 'bending_tube_loading_outer', 'cutting_cube': 'cutting_cube', 'placing_product':'placing_product'}
+        
+        self.poses_dic = {"put_hoop_into_box": [1.28376, 6.48821, np.deg2rad(0)] , "put_bending_tube_into_box": [1.28376, 13.12021, np.deg2rad(0)], 
+                        "put_hoop_on_table": [-12.26318, 4.72131, np.deg2rad(0)], "put_bending_tube_on_table":[-32, 8.0, np.deg2rad(-90)],
+                        'hoop_loading_inner':[-16.26241, 6.0, np.deg2rad(180)],'bending_tube_loading_inner':[-29.06123, 6.3725, np.deg2rad(0)],
+                        'hoop_loading_outer':[-16.26241, 6.0, np.deg2rad(180)], 'bending_tube_loading_outer': [-29.06123, 6.3725, np.deg2rad(0)],
+                        'cutting_cube':[-29.83212, -1.54882, np.deg2rad(0)], 'placing_product':[-40.47391, 12.91755, np.deg2rad(0)]}
+        # self.initial_xy_yaw = []
+        for idx, charc in enumerate(self.list):
+            xy_yaw = world_pose_to_navigation_pose(charc.get_world_poses())
+            # self.initial_xy_yaw.append(xy_yaw)
+            self.poses_dic[f'inital_pose_{idx}'] = xy_yaw
+        self.routes_dic = None
 
         self.states = [0]*self.num
         self.tasks = [0]*self.num
@@ -1079,10 +1097,7 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         # rotation: Gf.Rotation = matrix.ExtractRotation()
         self.pre_progress_buf = 0
         self.cuda_device = torch.device("cuda:0")
-        self.xyResolution = 5
-        self.obstacleX, self.obstacleY = hybridAStar.map_png(self.xyResolution)
-        self.planning_mid_point = [140, 220, 0]
-        self.mapParameters = hybridAStar.calculateMapParameters(self.obstacleX, self.obstacleY, self.xyResolution, np.deg2rad(15.0))
+        self.initialize_pre_def_routes(from_file = False)
         return
     
     def post_next_group_to_be_processed_step(self):
@@ -1108,6 +1123,196 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
             _dict['station'] = 'outer'
         self.process_groups_dict[cube_index] = _dict
         return cube_index, upper_tube_index, hoop_index, bending_tube_index
+    
+    def initialize_pre_def_routes(self, from_file = False):
+        if from_file == False:
+            # regnerate route map
+            pass
+        self.xyResolution = 5
+        self.obstacleX, self.obstacleY = hybridAStar.map_png(self.xyResolution)
+        self.planning_mid_point = [140, 220, 0]
+        self.mapParameters = hybridAStar.calculateMapParameters(self.obstacleX, self.obstacleY, self.xyResolution, np.deg2rad(15.0))
+        self.task_manager.characters.routes_dic = self.generate_routes(self.task_manager.characters.poses_dic, os.path.expanduser(self.cfg_env.env.route_character_file_path))
+    
+    def generate_routes(self, pose_dic : dict, file_path):
+        have_problem_routes = {'put_hoop_into_box':{'hoop_loading_inner':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]], 'hoop_loading_outer':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]],
+            'bending_tube_loading_inner':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]], 'bending_tube_loading_outer':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]],
+            'cutting_cube': [[-22.0, 14.0, np.deg2rad(180)], [-30, 10, np.deg2rad(-90)]],  'inital_pose_1': [[-22.0, 14.0, np.deg2rad(180)], [-32.0, 12.0, np.deg2rad(-90)]]
+            }, 
+            
+            }
+        path = os.path.expanduser(file_path)
+        routes_dic = {}
+        with open(path, 'rb') as f:
+            routes_dic = pickle.load(f)
+        for (key, s) in pose_dic.items():
+            if key in routes_dic.keys():
+                route_dic = routes_dic[key]
+            else:
+                route_dic = {}
+            for (_key, g) in pose_dic.items():
+                if _key == key or _key in route_dic.keys():
+                    continue
+                if key in have_problem_routes.keys() and _key in have_problem_routes[key].keys():
+                    x, y, yaw = self.path_planner_multi_poses(s.copy(), g.copy(), have_problem_routes[key][_key].copy())
+                else:
+                    x, y, yaw = self.path_planner(s.copy(), g.copy())
+                route_dic[_key] = (x,y,yaw)
+            routes_dic[key] = route_dic
+            with open(path, 'wb') as f:
+                pickle.dump(routes_dic, f)
+        return
+
+
+    def path_planner_multi_poses(self, start, goal, interval_path_list):
+        interval_path_list = [start] + interval_path_list + [goal]
+        x= []
+        y = []
+        yaw = []
+        trans_x = -50
+        trans_y = -30
+        for i in range(0, len(interval_path_list) - 1):
+            s = interval_path_list[i].copy()
+            g = interval_path_list[i+1].copy()
+            _x, _y, _yaw = self.path_planner(s, g)
+            x += _x
+            y += _y
+            yaw += _yaw
+        _x = [(value - trans_x)*self.xyResolution for value in x]
+        _y = [(value - trans_y)*self.xyResolution for value in y]
+        visualize = False
+        if visualize:
+            import math
+            for k in range(len(_x)):
+                plt.cla()
+                plt.xlim(min(self.obstacleX), max(self.obstacleX)) 
+                plt.ylim(min(self.obstacleY), max(self.obstacleY))        
+                # plt.xlim(x_limit[0], x_limit[1]) 
+                # plt.ylim(y_limit[0], y_limit[1])                
+                plt.xlim(0, 300) 
+                plt.ylim(0, 250)
+                plt.plot(self.obstacleX, self.obstacleY, "sk")
+                # plt.plot(s, g, linewidth=1.5, color='r', zorder=0)
+                plt.plot(_x, _y, linewidth=1.5, color='r', zorder=0)
+                # hybridAStar.drawCar(s[0], s[1], s[2])
+                # hybridAStar.drawCar(g[0], g[1], g[2])
+                hybridAStar.drawCar(_x[k], _y[k], yaw[k])
+                plt.arrow(_x[k], _y[k], 1*math.cos(yaw[k]), 1*math.sin(yaw[k]), width=.1)
+                plt.title("Hybrid A*")
+                plt.pause(0.01)
+        return x, y, yaw
+
+    def scale_pose(self, _pose: list):
+        pose = _pose.copy()
+        trans_x = -50
+        trans_y = -30
+        pose[0] = (pose[0]/self.xyResolution + trans_x)
+        pose[1] = (pose[1]/self.xyResolution + trans_y)
+        return pose
+
+    def path_planner(self, s, g):
+        # self.xyResolution = 5
+        trans_x = -50
+        trans_y = -30
+        # Set Start, Goal x, y, theta
+        # s = [0, 10, np.deg2rad(90)]
+        # g = [-13.3, 6, np.deg2rad(90)]
+        s[0] = (s[0] - trans_x)*self.xyResolution
+        s[1] = (s[1] - trans_y)*self.xyResolution
+        g[0] = (g[0] - trans_x)*self.xyResolution
+        g[1] = (g[1] - trans_y)*self.xyResolution
+        # self.obstacleX, self.obstacleY = hybridAStar.map_png(self.xyResolution)
+        # # Calculate map Paramaters
+        # self.mapParameters = hybridAStar.calculateself.MapParameters(self.obstacleX, self.obstacleY, self.xyResolution, np.deg2rad(15.0))
+        # Run Hybrid A*
+        dis_s_m = np.linalg.norm(np.array(s) - np.array(self.planning_mid_point))
+        dis_g_m = np.linalg.norm(np.array(g) - np.array(self.planning_mid_point))
+        import time  # 引入time模块
+        if min(s[0], g[0]) < self.planning_mid_point[0] and self.planning_mid_point[0] < max(s[0], g[0]) and dis_s_m > 10 and dis_g_m > 10:
+            self.planning_mid_point[2] = 0 if (g[0] - s[0]) >=0  else np.deg2rad(180)
+            start_t = time.time()
+            x1, y1, yaw1 = hybridAStar.run(s, self.planning_mid_point, self.mapParameters, plt)
+            x2, y2, yaw2 = hybridAStar.run(self.planning_mid_point, g, self.mapParameters, plt)
+            end_t = time.time()
+            if end_t-start_t > 3.:
+                a = 1
+            x = x1 + x2[1:]
+            y = y1 + y2[1:]
+            yaw = yaw1 + yaw2[1:]
+            a = 1
+        else:
+            start_t = time.time()
+            x, y, yaw = hybridAStar.run(s, g, self.mapParameters, plt)
+            end_t = time.time()
+            if end_t-start_t > 3.:
+                a = 1
+        # x_limit = [min(self.obstacleX), max(self.obstacleX)]
+        # y_limit = [min(self.obstacleY), max(self.obstacleY)]
+        scale_flag = True
+        if scale_flag:
+            x = [value/self.xyResolution + trans_x for value in x]
+            y = [value/self.xyResolution + trans_y for value in y]
+            # self.obstacleX = [value/self.xyResolution + trans_x  for value in self.obstacleX]
+            # self.obstacleY = [value/self.xyResolution + trans_y for value in self.obstacleY]
+        # # Draw Animated Car
+        # import math
+        visualize = False
+        def show_map_s_g():
+            import math
+            plt.cla()
+            plt.xlim(min(self.obstacleX), max(self.obstacleX)) 
+            plt.ylim(min(self.obstacleY), max(self.obstacleY))        
+            # plt.xlim(x_limit[0], x_limit[1]) 
+            # plt.ylim(y_limit[0], y_limit[1])                
+            plt.xlim(0, 300) 
+            plt.ylim(0, 250)
+            plt.plot(self.obstacleX, self.obstacleY, "sk")
+            # plt.plot(s, g, linewidth=1.5, color='r', zorder=0)
+            # plt.plot(x, y, linewidth=1.5, color='r', zorder=0)
+            hybridAStar.drawCar(s[0], s[1], s[2])
+            hybridAStar.drawCar(g[0], g[1], g[2])
+            plt.arrow(s[0], s[1], 1*math.cos(s[2]), 1*math.sin(s[2]), width=.1)
+            plt.arrow(g[0], g[1], 1*math.cos(g[2]), 1*math.sin(g[2]), width=.1)
+            plt.title("Hybrid A*")
+            plt.pause(0.01)
+
+        if visualize:
+            # x_limit = [-50, 30]
+            # y_limit= [-30, 40]
+            s[0] = (s[0])/self.xyResolution + trans_x
+            g[0] = (g[0])/self.xyResolution + trans_x
+            s[1] = (s[1])/self.xyResolution + trans_y
+            g[1] = (g[1])/self.xyResolution + trans_y
+            import math
+            for k in range(len(x)):
+                plt.cla()
+                plt.xlim(min(self.obstacleX), max(self.obstacleX)) 
+                plt.ylim(min(self.obstacleY), max(self.obstacleY))        
+                # plt.xlim(x_limit[0], x_limit[1]) 
+                # plt.ylim(y_limit[0], y_limit[1])                
+                plt.xlim(0, 300) 
+                plt.ylim(0, 250)
+                plt.plot(self.obstacleX, self.obstacleY, "sk")
+                # plt.plot(s, g, linewidth=1.5, color='r', zorder=0)
+                plt.plot(x, y, linewidth=1.5, color='r', zorder=0)
+                # hybridAStar.drawCar(s[0], s[1], s[2])
+                # hybridAStar.drawCar(g[0], g[1], g[2])
+                hybridAStar.drawCar(x[k], y[k], yaw[k])
+                plt.arrow(x[k], y[k], 1*math.cos(yaw[k]), 1*math.sin(yaw[k]), width=.1)
+                plt.title("Hybrid A*")
+                plt.pause(0.01)
+        
+        # plt.show()
+        def sample(x, interval = 2):
+            _x = x[1:-1]
+            _x = _x[::interval]
+            x = [x[0]] + _x + [x[-1]]
+            return x
+        x, y, yaw = sample(x), sample(y), sample(yaw)
+        return x, y, yaw
+
+
+
 
     def initialize_views(self, scene) -> None:
         """Initialize views for extension workflow."""

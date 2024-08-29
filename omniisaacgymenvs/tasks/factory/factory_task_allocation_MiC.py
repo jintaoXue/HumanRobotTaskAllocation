@@ -34,24 +34,17 @@ PYTHON_PATH omniisaacgymenvs/scripts/rlgames_train.py task=FactoryTaskNutBoltPic
 import torch
 from typing import Tuple
 from omniisaacgymenvs.tasks.factory.factory_task_allocation import FactoryTaskAlloc
-from omniisaacgymenvs.tasks.factory.factory_env_task_allocation_base import TaskManager
+from omniisaacgymenvs.tasks.factory.factory_env_task_allocation_base import TaskManager, world_pose_to_navigation_pose
 from omni.isaac.core.prims import RigidPrimView
 from omni.physx.scripts import utils
 from pxr import Gf, Sdf, Usd, UsdPhysics, UsdGeom, PhysxSchema
 from omni.usd import get_world_transform_matrix
 
-from omniisaacgymenvs.utils.hybridAstar import hybridAStar 
 from omniisaacgymenvs.utils.geometry import quaternion  
 import numpy as np
-import matplotlib.pyplot as plt
+
 MAX_FLOAT = 3.40282347e38
 # import numpy as np
-
-def world_pose_to_navigation_pose(world_pose):
-    position, orientation = world_pose[0][0].cpu().numpy(), world_pose[1][0].cpu().numpy()
-    euler_angles = quaternion.quaternionToEulerAngles(orientation)
-    nav_pose = [position[0], position[1], euler_angles[2]]
-    return nav_pose
 
 class FactoryTaskAllocMiC(FactoryTaskAlloc):
     def post_physics_step(
@@ -458,106 +451,6 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             self.materials.product_list[idx].set_velocities(torch.zeros((1,6), device=self.cuda_device))  
         return
 
-    def path_planner(self, s, g):
-        # self.xyResolution = 5
-        trans_x = -50
-        trans_y = -30
-        # Set Start, Goal x, y, theta
-        # s = [0, 10, np.deg2rad(90)]
-        # g = [-13.3, 6, np.deg2rad(90)]
-        s[0] = (s[0] - trans_x)*self.xyResolution
-        s[1] = (s[1] - trans_y)*self.xyResolution
-        g[0] = (g[0] - trans_x)*self.xyResolution
-        g[1] = (g[1] - trans_y)*self.xyResolution
-        # self.obstacleX, self.obstacleY = hybridAStar.map_png(self.xyResolution)
-        # # Calculate map Paramaters
-        # self.mapParameters = hybridAStar.calculateself.MapParameters(self.obstacleX, self.obstacleY, self.xyResolution, np.deg2rad(15.0))
-        # Run Hybrid A*
-        dis_s_m = np.linalg.norm(np.array(s) - np.array(self.planning_mid_point))
-        dis_g_m = np.linalg.norm(np.array(g) - np.array(self.planning_mid_point))
-        import time  # 引入time模块
-        if min(s[0], g[0]) < self.planning_mid_point[0] and self.planning_mid_point[0] < max(s[0], g[0]) and dis_s_m > 10 and dis_g_m > 10:
-            self.planning_mid_point[2] = 0 if (g[0] - s[0]) >=0  else np.deg2rad(180)
-            start_t = time.time()
-            x1, y1, yaw1 = hybridAStar.run(s, self.planning_mid_point, self.mapParameters, plt)
-            x2, y2, yaw2 = hybridAStar.run(self.planning_mid_point, g, self.mapParameters, plt)
-            end_t = time.time()
-            if end_t-start_t > 3.:
-                a = 1
-            x = x1 + x2[1:]
-            y = y1 + y2[1:]
-            yaw = yaw1 + yaw2[1:]
-            a = 1
-        else:
-            start_t = time.time()
-            x, y, yaw = hybridAStar.run(s, g, self.mapParameters, plt)
-            end_t = time.time()
-            if end_t-start_t > 3.:
-                a = 1
-        # x_limit = [min(self.obstacleX), max(self.obstacleX)]
-        # y_limit = [min(self.obstacleY), max(self.obstacleY)]
-        scale_flag = True
-        if scale_flag:
-            x = [value/self.xyResolution + trans_x for value in x]
-            y = [value/self.xyResolution + trans_y for value in y]
-            # self.obstacleX = [value/self.xyResolution + trans_x  for value in self.obstacleX]
-            # self.obstacleY = [value/self.xyResolution + trans_y for value in self.obstacleY]
-        # # Draw Animated Car
-        # import math
-        visualize = False
-        def show_map_s_g():
-            import math
-            plt.cla()
-            plt.xlim(min(self.obstacleX), max(self.obstacleX)) 
-            plt.ylim(min(self.obstacleY), max(self.obstacleY))        
-            # plt.xlim(x_limit[0], x_limit[1]) 
-            # plt.ylim(y_limit[0], y_limit[1])                
-            plt.xlim(0, 300) 
-            plt.ylim(0, 250)
-            plt.plot(self.obstacleX, self.obstacleY, "sk")
-            # plt.plot(s, g, linewidth=1.5, color='r', zorder=0)
-            # plt.plot(x, y, linewidth=1.5, color='r', zorder=0)
-            hybridAStar.drawCar(s[0], s[1], s[2])
-            hybridAStar.drawCar(g[0], g[1], g[2])
-            plt.arrow(s[0], s[1], 1*math.cos(s[2]), 1*math.sin(s[2]), width=.1)
-            plt.arrow(g[0], g[1], 1*math.cos(g[2]), 1*math.sin(g[2]), width=.1)
-            plt.title("Hybrid A*")
-            plt.pause(0.01)
-
-        if visualize:
-            # x_limit = [-50, 30]
-            # y_limit= [-30, 40]
-            s[0] = (s[0])/self.xyResolution + trans_x
-            g[0] = (g[0])/self.xyResolution + trans_x
-            s[1] = (s[1])/self.xyResolution + trans_y
-            g[1] = (g[1])/self.xyResolution + trans_y
-            import math
-            for k in range(len(x)):
-                plt.cla()
-                plt.xlim(min(self.obstacleX), max(self.obstacleX)) 
-                plt.ylim(min(self.obstacleY), max(self.obstacleY))        
-                # plt.xlim(x_limit[0], x_limit[1]) 
-                # plt.ylim(y_limit[0], y_limit[1])                
-                plt.xlim(0, 300) 
-                plt.ylim(0, 250)
-                plt.plot(self.obstacleX, self.obstacleY, "sk")
-                # plt.plot(s, g, linewidth=1.5, color='r', zorder=0)
-                plt.plot(x, y, linewidth=1.5, color='r', zorder=0)
-                # hybridAStar.drawCar(s[0], s[1], s[2])
-                # hybridAStar.drawCar(g[0], g[1], g[2])
-                hybridAStar.drawCar(x[k], y[k], yaw[k])
-                plt.arrow(x[k], y[k], 1*math.cos(yaw[k]), 1*math.sin(yaw[k]), width=.1)
-                plt.title("Hybrid A*")
-                plt.pause(0.01)
-        
-        # plt.show()
-        def sample(x, interval = 2):
-            _x = x[1:-1]
-            _x = _x[::interval]
-            x = [x[0]] + _x + [x[-1]]
-            return x
-        x, y, yaw = sample(x), sample(y), sample(yaw)
-        return x, y, yaw
     def post_conveyor_belt_step(self):
         '''material long cube'''
         #first check the state
