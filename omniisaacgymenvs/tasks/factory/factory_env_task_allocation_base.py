@@ -1135,11 +1135,51 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         self.task_manager.characters.routes_dic = self.generate_routes(self.task_manager.characters.poses_dic, os.path.expanduser(self.cfg_env.env.route_character_file_path))
     
     def generate_routes(self, pose_dic : dict, file_path):
-        have_problem_routes = {'put_hoop_into_box':{'hoop_loading_inner':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]], 'hoop_loading_outer':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]],
-            'bending_tube_loading_inner':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]], 'bending_tube_loading_outer':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]],
-            'cutting_cube': [[-22.0, 14.0, np.deg2rad(180)], [-30, 10, np.deg2rad(-90)]],  'inital_pose_1': [[-22.0, 14.0, np.deg2rad(180)], [-32.0, 12.0, np.deg2rad(-90)]]
-            }, 
-            
+        have_problem_routes = {
+            'put_hoop_into_box':{'hoop_loading_inner':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]], 'hoop_loading_outer':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]],
+                'bending_tube_loading_inner':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]], 'bending_tube_loading_outer':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]],
+                'cutting_cube': [[-22.0, 14.0, np.deg2rad(180)], [-30, 10, np.deg2rad(-90)]],  'inital_pose_1': [[-22.0, 14.0, np.deg2rad(180)], [-32.0, 12.0, np.deg2rad(-90)]]}, 
+            'put_bending_tube_into_box':{'hoop_loading_inner':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]], 'hoop_loading_outer':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]],
+                'bending_tube_loading_inner':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]], 'bending_tube_loading_outer':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]],                             
+                'cutting_cube': [[-22.0, 14.0, np.deg2rad(180)], [-30, 10, np.deg2rad(-90)]],  'inital_pose_1': [[-22.0, 14.0, np.deg2rad(180)], [-32.0, 12.0, np.deg2rad(-90)]]}, 
+            'put_hoop_on_table': {'put_bending_tube_on_table':[[-12.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)]], 
+                'hoop_loading_inner':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]], 'hoop_loading_outer':[[-12.0, 7.4, np.deg2rad(180)], [-16.26241, 7.4, np.deg2rad(180)]],
+                'bending_tube_loading_inner':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]], 'bending_tube_loading_outer':[[-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]],                             
+                'cutting_cube': [[-22.0, 14.0, np.deg2rad(180)], [-30, 10, np.deg2rad(-90)]],  'inital_pose_1': [[-22.0, 14.0, np.deg2rad(180)], [-32.0, 12.0, np.deg2rad(-90)]]},
+            'put_bending_tube_on_table':{'put_hoop_on_table':[[-28.7, 12.0, np.deg2rad(45)], [-22.0, 14.0, 0], [-12.4, 14.0, 0]],
+                'hoop_loading_inner': [[-28.7, 12.0, np.deg2rad(45)],  [-22.0, 14.0, 0], [-16.26, 14.0, np.deg2rad(-90)]], 'hoop_loading_outer': [[-28.7, 12.0, np.deg2rad(45)],  [-22.0, 14.0, 0], [-16.26, 14.0, np.deg2rad(-90)]],
+                'cutting_cube': [[-30.0, 7.0, np.deg2rad(-90)]], 'inital_pose_0': [[-28.7, 12.0, np.deg2rad(45)], [-22.0, 14.0, 0], [-11.58, 10.0, np.deg2rad(-90)]]},
+            'hoop_loading_inner': {'put_hoop_into_box': [[-16.0, 7.2, np.deg2rad(0)], [-12.0, 7.4, np.deg2rad(0)]], 'put_bending_tube_into_box':[[-16.0, 7.2, np.deg2rad(0)], [-12.0, 7.4, np.deg2rad(0)]], 
+                'put_hoop_on_table':[[-16.0, 7.2, np.deg2rad(0)], [-12.0, 7.4, np.deg2rad(0)]], 'put_bending_tube_on_table':[[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)]],
+                'bending_tube_loading_inner':[[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]], 'bending_tube_loading_outer': [[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]],
+                'cutting_cube': [[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-30, 10, np.deg2rad(-90)]], 'placing_product':[[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)]],
+                'inital_pose_0': [[-16.0, 7.2, np.deg2rad(0)], [-12.0, 7.4, np.deg2rad(0)]], 'inital_pose_1': [[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-32.0, 12.0, np.deg2rad(-90)]]},
+            'bending_tube_loading_inner': {'put_hoop_into_box':[[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]], 'put_bending_tube_into_box': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]], 
+                'put_hoop_on_table': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)], [-12.0, 14.0, np.deg2rad(-90)]], 'hoop_loading_inner': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)],  [-16.26, 14.0, np.deg2rad(-90)]],
+                'hoop_loading_outer': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)],  [-16.26, 14.0, np.deg2rad(-90)]], 'inital_pose_0': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)], [-12.0, 14.0, np.deg2rad(-90)]]},
+            'hoop_loading_outer': {'put_hoop_into_box': [[-16.0, 7.2, np.deg2rad(0)], [-12.0, 7.4, np.deg2rad(0)]], 'put_bending_tube_into_box':[[-16.0, 7.2, np.deg2rad(0)], [-12.0, 7.4, np.deg2rad(0)]], 
+                'put_hoop_on_table':[[-16.0, 7.2, np.deg2rad(0)], [-12.0, 7.4, np.deg2rad(0)]], 'put_bending_tube_on_table':[[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)]],
+                'bending_tube_loading_inner':[[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]], 'bending_tube_loading_outer': [[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]],
+                'cutting_cube': [[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-30, 10, np.deg2rad(-90)]], 'placing_product':[[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)]],
+                'inital_pose_0': [[-16.0, 7.2, np.deg2rad(0)], [-12.0, 7.4, np.deg2rad(0)]], 'inital_pose_1': [[-16.26, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-32.0, 12.0, np.deg2rad(-90)]]},
+            'bending_tube_loading_outer': {'put_hoop_into_box':[[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]], 'put_bending_tube_into_box': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]], 
+                'put_hoop_on_table': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)], [-12.0, 14.0, np.deg2rad(-90)]], 'hoop_loading_inner': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)],  [-16.26, 14.0, np.deg2rad(-90)]],
+                'hoop_loading_outer': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)],  [-16.26, 14.0, np.deg2rad(-90)]], 'inital_pose_0': [[-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)], [-12.0, 14.0, np.deg2rad(-90)]]},
+            'cutting_cube': {'put_hoop_into_box':[[-30, 10, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]], 'put_bending_tube_into_box': [[-30, 10, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]],
+                'put_hoop_on_table': [[-30, 10, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(0)], [-12.0, 14.0, np.deg2rad(-90)]], 'put_bending_tube_on_table': [[-30, 8, np.deg2rad(90)]],
+                'hoop_loading_inner':[[-30, 10, np.deg2rad(90)], [-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)],  [-16.26, 14.0, np.deg2rad(-90)]], 'hoop_loading_outer':[[-30, 10, np.deg2rad(90)], [-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)],  [-16.26, 14.0, np.deg2rad(-90)]],
+                'inital_pose_0':[[-30, 10, np.deg2rad(90)], [-26.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)], [-12.0, 14.0, np.deg2rad(-90)]], 'inital_pose_1':[[-30, 8, np.deg2rad(90)]]},
+            'placing_product': {'put_hoop_into_box': [[-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]], 'put_bending_tube_into_box':[[-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]], 
+                'put_hoop_on_table':[[-22.0, 14.0, np.deg2rad(0)], [-12.0, 14.0, np.deg2rad(0)]], 'inital_pose_0': [[-22.0, 14.0, np.deg2rad(0)], [-12.0, 14.0, np.deg2rad(0)]],                
+                'hoop_loading_inner':[[-22.0, 14.0, np.deg2rad(0)], [-16.26, 14.0, np.deg2rad(-90)]], 'hoop_loading_outer':[[-22.0, 14.0, np.deg2rad(0)], [-16.26, 14.0, np.deg2rad(-90)]]},
+            'inital_pose_0' : {'put_bending_tube_on_table': [[-11.58, 10.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-28.7, 12.0, np.deg2rad(-135)]], 'hoop_loading_inner':[[-12.0, 7.4, np.deg2rad(180)], [-16.0, 7.2, np.deg2rad(180)]],  
+                'bending_tube_loading_inner':[[-12.0, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]], 'hoop_loading_outer':[[-12.0, 7.4, np.deg2rad(180)], [-16.0, 7.2, np.deg2rad(180)]], 
+                'bending_tube_loading_outer':[[-12.0, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-26.0, 14.0, np.deg2rad(180)]], 'cutting_cube':[[-12.0, 14.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)] , [-26.0, 14.0, np.deg2rad(180)], [-30, 10, np.deg2rad(-90)]], 
+                'placing_product': [[-12.0, 14.0, np.deg2rad(0)], [-22.0, 14.0, np.deg2rad(0)]], 'inital_pose_1':[[-11.58, 10.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(180)], [-28.7, 12.0, np.deg2rad(-135)]]},
+            'inital_pose_1': {'put_hoop_into_box': [[-30.0, 12.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]], 'put_bending_tube_into_box':[[-30.0, 12.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(0)], [-16.0, 14.0, np.deg2rad(0)]],
+                              'put_hoop_on_table':[[-30.0, 12.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(0)], [-12.0, 14.0, np.deg2rad(0)]], 'hoop_loading_inner':[[-30.0, 12.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(0)], [-16.26, 14.0, np.deg2rad(-90)]],
+                              'hoop_loading_outer':[[-30.0, 12.0, np.deg2rad(90)], [-22.0, 14.0, np.deg2rad(0)], [-16.26, 14.0, np.deg2rad(-90)]], 'cutting_cube':[[-30, 8, np.deg2rad(-90)]],
+                               'inital_pose_0': [[-28.7, 12.0, np.deg2rad(45)], [-22.0, 14.0, np.deg2rad(0)], [-11.58, 10.0, np.deg2rad(-90)]]}
             }
         path = os.path.expanduser(file_path)
         routes_dic = {}
@@ -1211,6 +1251,11 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         return pose
 
     def path_planner(self, s, g):
+        dis = np.linalg.norm(np.array(s[:2]) - np.array(g[:2]))
+        if dis < 0.1:
+            x, y, yaw = [s[0], g[0]], [s[1], g[1]], [s[2], g[2]]
+            return x,y,yaw
+
         # self.xyResolution = 5
         trans_x = -50
         trans_y = -30
