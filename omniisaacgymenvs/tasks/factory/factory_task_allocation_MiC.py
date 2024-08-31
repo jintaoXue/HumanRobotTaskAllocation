@@ -178,10 +178,6 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
             if len(self.task_manager.characters.x_paths[idx]) == 0:
                 target_position, target_orientation = current_pose
                 s = world_pose_to_navigation_pose(current_pose)
-                # matrix = Gf.Matrix4d()
-                # orientation = current_pose[1][0].cpu()
-                # matrix.SetRotateOnly(Gf.Quatd(float(orientation[0]), float(orientation[1]), float(orientation[2]), float(orientation[3])))
-                # A = matrix.ExtractRotation().GetAngle()
                 if task == 1:
                     g = self.task_manager.characters.picking_pose_hoop
                 elif task == 2:
@@ -201,7 +197,10 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 if np.linalg.norm(np.array(s[:2]) - np.array(g[:2])) < 0.1:
                     reaching_flag = True
                 else:
-                    self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.path_planner(s.copy(), g.copy())
+                    s_str = self.find_closest_pose(pose_dic=self.task_manager.characters.poses_dic, ego_pose=s)
+                    g_str = self.task_manager.characters.sub_task_character_dic[task]
+                    # self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.path_planner(s.copy(), g.copy())
+                    self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.task_manager.characters.routes_dic[s_str][g_str]
             else:
                 target_position, target_orientation, reaching_flag = self.task_manager.characters.step_next_pose(charac_idx = idx)
                 target_position, target_orientation = torch.tensor([target_position], device=self.cuda_device, dtype=torch.float32), torch.tensor([target_orientation], device=self.cuda_device, dtype=torch.float32)
@@ -351,7 +350,10 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                         reaching_flag = True
                     else:
                         s, g = world_pose_to_navigation_pose(current_pose), world_pose_to_navigation_pose(box_pose)
-                        self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s.copy(), g.copy())
+                        s_str = self.find_closest_pose(pose_dic=self.task_manager.agvs.poses_dic, ego_pose=s)
+                        g_str = self.find_closest_pose(pose_dic=self.task_manager.agvs.poses_dic, ego_pose=g)
+                        self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.task_manager.agvs.routes_dic[s_str][g_str]
+                        # self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s.copy(), g.copy())
                 else:
                     target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
                     target_position, target_orientation = torch.tensor([target_position], device=self.cuda_device, dtype=torch.float32), torch.tensor([target_orientation], device=self.cuda_device, dtype=torch.float32)
@@ -381,7 +383,10 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 if np.linalg.norm(np.array(s[:2]) - np.array(g[:2])) < 0.1:
                     reaching_flag = True
                 else:
-                    self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s.copy(), g.copy())
+                    s_str = self.find_closest_pose(pose_dic=self.task_manager.agvs.poses_dic, ego_pose=s)
+                    g_str = self.task_manager.agvs.sub_task_dic[task]
+                    self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.task_manager.agvs.routes_dic[s_str][g_str]
+                    # self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s.copy(), g.copy())
                 # self.task_manager.agvs.path_idxs[idx] = 0
             else:
                 target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
@@ -1606,4 +1611,17 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
         next_pose, _ = self.get_next_pose_helper(welder_outer_pose[0], target, self.operator_welder)
         self.obj_11_welding_1.set_joint_positions(next_pose)
         self.obj_11_welding_1.set_joint_velocities(torch.zeros(1, device=self.cuda_device))
+    
+    def find_closest_pose(self, pose_dic, ego_pose):
+        dis = np.inf
+        key = None
+        for _key, val in pose_dic.items():
+            _dis = np.linalg.norm(np.array(val[:2]) - np.array(ego_pose[:2]))
+            if _dis < 0.1:
+                return _key
+            elif _dis < dis:
+                key = _key
+                dis = _dis
+        assert dis > 3, 'error when get closest pose'
+        return key
     
