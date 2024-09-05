@@ -1,5 +1,5 @@
 #!/bin/bash
-SCRIPT_DIR="${HOME}/.local/share/ov/pkg/isaac_sim-2023.1.1"
+SCRIPT_DIR="${HOME}/.local/share/ov/pkg/isaac-sim-2023.1.1"
 export PYTHONPATH=$PYTHONPATH:$SCRIPT_DIR/../../../$PYTHONPATH:$SCRIPT_DIR/exts/omni.isaac.kit:$SCRIPT_DIR/exts/omni.isaac.gym:$SCRIPT_DIR/kit/kernel/py:\
 $SCRIPT_DIR/kit/plugins/bindings-python:$SCRIPT_DIR/exts/omni.isaac.lula/pip_prebundle:$SCRIPT_DIR/exts/omni.exporter.urdf/pip_prebundle:\
 $SCRIPT_DIR/kit/exts/omni.kit.pip_archive/pip_prebundle:$SCRIPT_DIR/exts/omni.isaac.core_archive/pip_prebundle:\

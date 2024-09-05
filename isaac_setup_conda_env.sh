@@ -2,7 +2,7 @@
 BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 MY_DIR="$(realpath -s "$BASE_DIR")"
 
-SCRIPT_DIR="${HOME}/.local/share/ov/pkg/isaac_sim-2023.1.1"
+SCRIPT_DIR="${HOME}/.local/share/ov/pkg/isaac-sim-2023.1.1"
 
 # path=$SCRIPT_DIR
 # while [[ $path != / ]];
