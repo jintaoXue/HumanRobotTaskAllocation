@@ -203,7 +203,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                     self.task_manager.characters.x_paths[idx], self.task_manager.characters.y_paths[idx], self.task_manager.characters.yaws[idx] = self.task_manager.characters.routes_dic[s_str][g_str]
             else:
                 target_position, target_orientation, reaching_flag = self.task_manager.characters.step_next_pose(charac_idx = idx)
-                target_position, target_orientation = torch.tensor([target_position], device=self.cuda_device, dtype=torch.float32), torch.tensor([target_orientation], device=self.cuda_device, dtype=torch.float32)
+                target_position, target_orientation = torch.tensor(np.expand_dims(target_position, axis=0), device=self.cuda_device, dtype=torch.float32), torch.tensor(np.expand_dims(target_orientation, axis=0), device=self.cuda_device, dtype=torch.float32)
                 if reaching_flag: 
                     self.task_manager.characters.reset_path(idx)
 
@@ -356,7 +356,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                         # self.task_manager.agvs.x_paths[idx], self.task_manager.agvs.y_paths[idx], self.task_manager.agvs.yaws[idx] = self.path_planner(s.copy(), g.copy())
                 else:
                     target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
-                    target_position, target_orientation = torch.tensor([target_position], device=self.cuda_device, dtype=torch.float32), torch.tensor([target_orientation], device=self.cuda_device, dtype=torch.float32)
+                    target_position, target_orientation = torch.tensor(np.expand_dims(target_position, axis=0), device=self.cuda_device, dtype=torch.float32), torch.tensor(np.expand_dims(target_orientation, axis=0), device=self.cuda_device, dtype=torch.float32)
                     if reaching_flag:
                         self.task_manager.agvs.reset_path(idx)
                 if reaching_flag:
@@ -390,7 +390,7 @@ class FactoryTaskAllocMiC(FactoryTaskAlloc):
                 # self.task_manager.agvs.path_idxs[idx] = 0
             else:
                 target_position, target_orientation, reaching_flag = self.task_manager.agvs.step_next_pose(agv_idx = idx)
-                target_position, target_orientation = torch.tensor([target_position], device=self.cuda_device, dtype=torch.float32), torch.tensor([target_orientation], device=self.cuda_device, dtype=torch.float32)
+                target_position, target_orientation = torch.tensor(np.expand_dims(target_position, axis=0), device=self.cuda_device, dtype=torch.float32), torch.tensor(np.expand_dims(target_orientation, axis=0), device=self.cuda_device, dtype=torch.float32)
                 if reaching_flag:
                     self.task_manager.agvs.reset_path(idx)
             if reaching_flag:
