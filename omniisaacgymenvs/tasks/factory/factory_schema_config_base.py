@@ -54,10 +54,6 @@ class Sim:
 @dataclass
 class Env:
     env_spacing: float  # lateral offset between envs
-    franka_depth: float  # depth offset of Franka base relative to env origin
-    table_height: float  # height of table
-    franka_friction: float  # coefficient of friction associated with Franka
-    table_friction: float  # coefficient of friction associated with table
 
 
 @dataclass

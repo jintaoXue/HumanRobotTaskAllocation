@@ -45,34 +45,3 @@ class FactoryABCBase(ABC):
     def _get_base_yaml_params(self):
         """Initialize instance variables from YAML files."""
         pass
-
-    @abstractmethod
-    def import_franka_assets(self):
-        """Set Franka and table asset options. Import assets."""
-        pass
-
-    @abstractmethod
-    def refresh_base_tensors(self):
-        """Refresh tensors."""
-        # NOTE: Tensor refresh functions should be called once per step, before setters.
-        pass
-
-    @abstractmethod
-    def parse_controller_spec(self):
-        """Parse controller specification into lower-level controller configuration."""
-        pass
-
-    @abstractmethod
-    def generate_ctrl_signals(self):
-        """Get Jacobian. Set Franka DOF position targets or DOF torques."""
-        pass
-
-    @abstractmethod
-    def enable_gravity(self):
-        """Enable gravity."""
-        pass
-
-    @abstractmethod
-    def disable_gravity(self):
-        """Disable gravity."""
-        pass

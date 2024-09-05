@@ -43,7 +43,6 @@ from omni.isaac.core.utils.torch.transformations import tf_combine
 from typing import Tuple
 
 import omni.isaac.core.utils.torch as torch_utils
-import omniisaacgymenvs.tasks.factory.factory_control as fc
 from omniisaacgymenvs.tasks.factory.factory_env_task_allocation_base import FactoryEnvTaskAlloc
 from omniisaacgymenvs.tasks.factory.factory_schema_class_task import FactoryABCTask
 from omniisaacgymenvs.tasks.factory.factory_schema_config_task import (

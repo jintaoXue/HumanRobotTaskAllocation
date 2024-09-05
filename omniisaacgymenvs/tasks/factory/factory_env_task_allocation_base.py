@@ -44,10 +44,6 @@ from omni.isaac.core.utils.stage import add_reference_to_stage
 from omniisaacgymenvs.tasks.base.rl_task_v1 import RLTask
 from omni.physx.scripts import physicsUtils, utils
 
-from omniisaacgymenvs.robots.articulations.views.factory_franka_view import (
-    FactoryFrankaView,
-)
-import omniisaacgymenvs.tasks.factory.factory_control as fc
 from omniisaacgymenvs.tasks.factory.factory_base import FactoryBase
 from omniisaacgymenvs.tasks.factory.factory_schema_class_env import FactoryABCEnv
 from omniisaacgymenvs.tasks.factory.factory_schema_config_env import (
@@ -1393,62 +1389,10 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         return x, y, yaw
 
 
-
-
     def initialize_views(self, scene) -> None:
         """Initialize views for extension workflow."""
-
         super().initialize_views(scene)
-
-        self.import_franka_assets(add_to_stage=False)
         self._import_env_assets(add_to_stage=False)
-
-        if scene.object_exists("frankas_view"):
-            scene.remove_object("frankas_view", registry_only=True)
-        if scene.object_exists("nuts_view"):
-            scene.remove_object("nuts_view", registry_only=True)
-        if scene.object_exists("bolts_view"):
-            scene.remove_object("bolts_view", registry_only=True)
-        if scene.object_exists("hands_view"):
-            scene.remove_object("hands_view", registry_only=True)
-        if scene.object_exists("lfingers_view"):
-            scene.remove_object("lfingers_view", registry_only=True)
-        if scene.object_exists("rfingers_view"):
-            scene.remove_object("rfingers_view", registry_only=True)
-        if scene.object_exists("fingertips_view"):
-            scene.remove_object("fingertips_view", registry_only=True)
-
-        self.frankas = FactoryFrankaView(
-            prim_paths_expr="/World/envs/.*/franka", name="frankas_view"
-        )
-        self.nuts = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/nut/factory_nut.*", name="nuts_view"
-        )
-        self.bolts = RigidPrimView(
-            prim_paths_expr="/World/envs/.*/bolt/factory_bolt.*", name="bolts_view"
-        )
-
-        scene.add(self.nuts)
-        scene.add(self.bolts)
-        scene.add(self.frankas)
-        scene.add(self.frankas._hands)
-        scene.add(self.frankas._lfingers)
-        scene.add(self.frankas._rfingers)
-        scene.add(self.frankas._fingertip_centered)
-
-    def create_nut_bolt_material(self):
-        """Define nut and bolt material."""
-
-        self.nutboltPhysicsMaterialPath = "/World/Physics_Materials/NutBoltMaterial"
-
-        utils.addRigidBodyMaterial(
-            self._stage,
-            self.nutboltPhysicsMaterialPath,
-            density=self.cfg_env.env.nut_bolt_density,
-            staticFriction=self.cfg_env.env.nut_bolt_friction,
-            dynamicFriction=self.cfg_env.env.nut_bolt_friction,
-            restitution=0.0,
-        )
 
     def _import_env_assets(self, add_to_stage=True):
         """Import modular production assets."""
@@ -1460,27 +1404,6 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
         assets_root_path = get_assets_root_path()
 
         for i in range(0, self._num_envs):
-            # from omni.usd import get_context
-            # usd_path = "/home/xue/work/Dataset/3D_model/xjt_v7.usd"
-            # get_context().open_stage(usd_path)
-            # omni.usd.get_context().open_stage(usd_path)
-            # Wait two frames so that stage starts loading
-            # self._simulation_app.update()
-            # self._simulation_app.update()
-
-            # print("Loading stage...")
-            # from omni.isaac.core.utils.stage import is_stage_loading
-
-            # while is_stage_loading():
-            #     self._simulation_app.update()
-            # print("Loading Complete")
-            # omni.timeline.get_timeline_interface().play()
-            
-            # while self._simulation_app.is_running():
-            #     # Run in realtime mode, we don't specify the step size
-            #     self._simulation_app.update()
-            # omni.timeline.get_timeline_interface().stop()
-            # j = np.random.randint(0, len(self.cfg_env.env.desired_subassemblies))
             for j in range(0, len(self.cfg_env.env.desired_subassemblies)):
 
                 subassembly = self.cfg_env.env.desired_subassemblies[j]
@@ -1514,23 +1437,6 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
                         translation=obj_translation,
                         orientation=obj_orientation,
                     )
-                    #debug
-                    # stage_utils.print_stage_prim_paths()
-                    # self._stage.GetPrimAtPath(
-                    #     f"/World/envs/env_{i}" + f"/obj/factory_{components[0]}/collisions"
-                    # ).SetInstanceable(
-                    #     False
-                    # )  # This is required to be able to edit physics material
-                    # physicsUtils.add_physics_material_to_prim(
-                    #     self._stage,
-                    #     self._stage.GetPrimAtPath(
-                    #         f"/World/envs/env_{i}"
-                    #         + f"/nut/factory_{components[0]}/collisions/mesh_0"
-                    #     ),
-                    #     self.nutboltPhysicsMaterialPath,
-                    # )
-
-                    # applies articulation settings from the task configuration yaml file
                     self._sim_config.apply_articulation_settings(
                         "obj",
                         self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj"),
@@ -1538,35 +1444,6 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
                     )
                 thread_pitch = self.asset_info_obj[subassembly]["thread_pitch"]
                 self.thread_pitches.append(thread_pitch)
-            # from omni.kit import commands
-            # result, prim_ConveyorBelt_A09_0_0  = commands.execute(
-            #     "CreateConveyorBelt",
-            #     prim_name="ConveyorActionGraph",
-            #     conveyor_prim=self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj/ConveyorBelt_A09_0_0/Belt")
-            # )
-            # self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj/ConveyorBelt_A09_0_0/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:enabled').Set(False)
-
-            # self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj/ConveyorBelt_A09_0_2/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:enabled').Set(False)
-            # self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj/ConveyorBelt_A09_0_2/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:velocity').Set(0)
-            # self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj/ConveyorBelt_A09_0_0/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:enabled').Set(False)
-            # self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj/ConveyorBelt_A09_0_0/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:velocity').Set(0)
-
-
-            # self._stage.GetPrimAtPath(f"/World/envs/env_1" + "/obj/ConveyorBelt_A09_0_2/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:enabled').Set(False)
-            # self._stage.GetPrimAtPath(f"/World/envs/env_1" + "/obj/ConveyorBelt_A09_0_2/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:velocity').Set(0)
-            # self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/ConveyorBelt_A09_0_0/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:enabled').Set(False)
-            # self._stage.GetPrimAtPath(f"/World/envs/env_0" + "/obj/ConveyorBelt_A09_0_0/ConveyorBeltGraph/ConveyorNode").GetAttribute('inputs:velocity').Set(0)
-            # ConveyorNode_0 = self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj/ConveyorBelt_A09_0_0/ConveyorBeltGraph/ConveyorNode")
-            # ConveyorNode_0.GetAttribute('inputs:velocity').Set(100)
-            # ConveyorNode_0.GetAttribute('inputs:animateTexture').Set(True)
-            # ConveyorNode_0.GetAttribute('inputs:enabled').Set(False)
-            # result, prim_ConveyorBelt_A09_0_2 = commands.execute(
-            #     "CreateConveyorBelt",
-            #     prim_name="ConveyorActionGraph",
-            #     conveyor_prim=self._stage.GetPrimAtPath(f"/World/envs/env_{i}" + "/obj/ConveyorBelt_A09_0_2/Belt")
-            # )
-            
-
         # For computing body COM pos
         self.obj_heights = torch.tensor(
             self.obj_heights, device=self._device
@@ -1583,32 +1460,4 @@ class FactoryEnvTaskAlloc(FactoryBase, FactoryABCEnv):
 
     def refresh_env_tensors(self):
         """Refresh tensors."""
-
-        # Nut tensors
-        self.nut_pos, self.nut_quat = self.nuts.get_world_poses(clone=False)
-        self.nut_pos -= self.env_pos
-
-        self.nut_com_pos = fc.translate_along_local_z(
-            pos=self.nut_pos,
-            quat=self.nut_quat,
-            offset=self.bolt_head_heights + self.nut_heights * 0.5,
-            device=self.device,
-        )
-        self.nut_com_quat = self.nut_quat  # always equal
-
-        nut_velocities = self.nuts.get_velocities(clone=False)
-        self.nut_linvel = nut_velocities[:, 0:3]
-        self.nut_angvel = nut_velocities[:, 3:6]
-
-        self.nut_com_linvel = self.nut_linvel + torch.cross(
-            self.nut_angvel, (self.nut_com_pos - self.nut_pos), dim=1
-        )
-        self.nut_com_angvel = self.nut_angvel  # always equal
-
-        self.nut_force = self.nuts.get_net_contact_forces(clone=False)
-
-        # Bolt tensors
-        self.bolt_pos, self.bolt_quat = self.bolts.get_world_poses(clone=False)
-        self.bolt_pos -= self.env_pos
-
-        self.bolt_force = self.bolts.get_net_contact_forces(clone=False)
+        pass

@@ -37,7 +37,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Sim:
-    disable_franka_collisions: bool  # disable collisions between Franka and objects
+    pass
 
 
 @dataclass
